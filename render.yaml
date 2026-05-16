@@ -1,9 +1,0 @@
-services:
-  - type: web
-    name: air-hockey
-    runtime: node
-    plan: free
-    buildCommand: npm install
-    startCommand: npm start
-    healthCheckPath: /healthz
-    autoDeploy: true

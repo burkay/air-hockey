@@ -108,5 +108,7 @@ iPhone tarayıcısından air hockey. İki mod:
 - Oda anahtarı = şifrenin kendisi. Aynı şifreyle aktif oda varsa kurma reddedilir.
 - Socket.IO olayları: `create_room`/`join_room`/`state`/`input`/`rematch`/
   `rematch_request`/`peer_joined`/`peer_left`/`error_msg`.
-- Dağıtım: kalıcı WebSocket destekleyen Node host gerekir (Render/Railway/Fly).
-  Statik-only platformlar (Vercel/Netlify) uygun değil.
+- Dağıtım: yerel PC + **Tailscale Funnel** (`tailscale funnel --bg 3000`)
+  ya da `PORT` env + `npm start` ile herhangi bir kalıcı WebSocket Node
+  host. Statik-only (GitHub Pages/Vercel/Netlify) uygun değil.
+  (Render iptal edildi; `render.yaml` kaldırıldı.)

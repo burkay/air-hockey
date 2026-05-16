@@ -28,37 +28,18 @@ Sunucu `http://localhost:3000` adresinde açılır.
 - **Aynı bilgisayar:** İki tarayıcı sekmesi aç (biri kurar, biri katılır).
 - **Aynı Wi-Fi:** Telefonlardan `http://<PC-LAN-IP>:3000` adresini açın.
   Windows'ta LAN IP için: `ipconfig` → "IPv4 Address".
-- **Farklı internetler (gerçek uzaktan oyun):** Sunucuya internetten
-  erişilebilmesi gerekir. İki yol:
-  - **Geçici tünel (hesapsız):** `npx cloudflared tunnel --url http://localhost:3000`
-    komutu çalışırken verilen `https://...trycloudflare.com` linkini arkadaşına
-    gönder. (PC açık kalmalı; her çalıştırmada link değişir.)
-  - **Bulut (kalıcı link — önerilen):** aşağıdaki Render adımları.
+- **Farklı internetler (gerçek uzaktan oyun):** Sunucu PC'de `npm start` ile
+  çalışır; internetten erişim için (PC açık + sunucu çalışır olmalı):
+  - **Tailscale Funnel (arkadaş kurulum yapmadan):**
+    `tailscale funnel --bg 3000` → çıkan herkese açık `https://<ad>.ts.net/`
+    linkini arkadaşına gönder. Kapatmak: `tailscale funnel --https=443 off`.
+  - **Tailscale tailnet (en düşük gecikme):** arkadaş Tailscale kurup
+    tailnet'e katılır, `http://<tailscale-ip>:3000` açar.
+  - **Geçici tünel (hesapsız):** `npx cloudflared tunnel --url http://localhost:3000`.
 
-> GitHub Pages / Vercel / Netlify gibi salt statik (veya kısa ömürlü
-> fonksiyon) platformları **uygun değildir** — kalıcı WebSocket sunucusu
-> gerekir.
-
-## Render'a dağıtım (ücretsiz, kalıcı link)
-
-Repo bir `render.yaml` (Blueprint) içerir; Render bunu okuyup servisi
-otomatik kurar. Private repo da desteklenir.
-
-1. https://render.com → **GitHub ile kaydol/giriş yap** (ücretsiz).
-2. Dashboard → **New +** → **Blueprint**.
-3. `air-hockey` reposunu seç (Render erişim isterse onayla) → **Apply**.
-   - `render.yaml`: Node, `npm install` → `npm start`, health `/healthz`,
-     `PORT` Render tarafından otomatik verilir (kod zaten `process.env.PORT`).
-4. İlk derleme ~1-2 dk. Bittiğinde `https://air-hockey-XXXX.onrender.com`
-   linki çıkar. Bu linki iki telefonda aç → biri **Oyun Kur** + şifre,
-   diğeri **Oyuna Katıl** + aynı şifre.
-
-Notlar:
-- **Ücretsiz plan uykuya geçer:** ~15 dk hareketsizlikte durur; sonraki
-  açılış ~30-60 sn (cold start) gecikir. Oynarken sorun olmaz; ilk açılış
-  yavaş olabilir, birkaç saniye bekleyin.
-- Repoya `git push` yapınca Render **otomatik yeniden dağıtır**
-  (`autoDeploy: true`).
+> GitHub Pages / Vercel / Netlify gibi salt statik platformlar **uygun
+> değildir** — kalıcı WebSocket sunucusu gerekir. İstenirse `process.env.PORT`
+> + `npm start` ile herhangi bir kalıcı Node host'a da yüklenebilir.
 
 ## Mimari (kısa)
 
