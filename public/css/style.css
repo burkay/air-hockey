@@ -1,0 +1,208 @@
+/* Mobil oncelikli, dikey air hockey arayuzu */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0b1d2a;
+  --bg2: #12324a;
+  --accent: #2fd6c4;
+  --accent2: #ff5d73;
+  --text: #eaf6f7;
+  --muted: #8fb3c4;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+.screen {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.screen.active { display: flex; }
+
+.panel {
+  width: min(420px, 90vw);
+  background: var(--bg2);
+  border-radius: 18px;
+  padding: 28px 22px;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .4);
+}
+
+h1 { font-size: 32px; letter-spacing: 1px; }
+h2 { font-size: 24px; margin-bottom: 8px; }
+.subtitle { color: var(--muted); font-size: 14px; margin: 8px 0 18px; }
+
+.btn {
+  display: block;
+  width: 100%;
+  padding: 15px 16px;
+  margin: 10px 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  background: #1d4663;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  -webkit-appearance: none;
+}
+.btn:active { transform: scale(.98); }
+.btn.primary { background: var(--accent); color: #04222b; }
+.btn.ghost { background: transparent; color: var(--muted); }
+
+.lobby-form { margin-top: 6px; text-align: left; }
+.lobby-form label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+.lobby-form input[type="text"] {
+  width: 100%;
+  padding: 14px;
+  margin: 6px 0 14px;
+  font-size: 18px;
+  color: var(--text);
+  background: #0c2536;
+  border: 2px solid #1d4663;
+  border-radius: 10px;
+}
+.lobby-form input[type="text"]:focus { outline: none; border-color: var(--accent); }
+
+.rules { border: none; margin: 6px 0 12px; }
+.rules legend { font-size: 14px; color: var(--muted); margin-bottom: 8px; }
+.radio {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; margin: 6px 0;
+  background: #0c2536; border-radius: 10px;
+  color: var(--text); font-size: 15px;
+}
+.radio input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+.hidden { display: none !important; }
+
+/* Arcade skin: cerceve disi (letterbox) zemini koyu, siyah kasaya uyum */
+body.skin-arcade { background: #05070d; }
+body.skin-arcade #screen-game { background: #05070d; }
+
+/* Skin secici */
+.skin-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 18px;
+}
+.skin-label { color: var(--muted); font-size: 13px; margin-right: 2px; }
+.skin-btn {
+  flex: 1;
+  padding: 10px 8px;
+  font-size: 14px; font-weight: 600;
+  color: var(--muted);
+  background: #0c2536;
+  border: 2px solid #1d4663;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.skin-btn.active {
+  color: #04222b;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.error { color: var(--accent2); font-size: 14px; min-height: 18px; margin-top: 10px; }
+
+.code {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  background: #0c2536;
+  color: var(--accent);
+  padding: 14px;
+  border-radius: 12px;
+  margin: 14px 0;
+  word-break: break-all;
+}
+
+/* Oyun ekrani */
+#screen-game { padding: 0; }
+#board {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+#hud {
+  position: absolute;
+  top: env(safe-area-inset-top);
+  left: 0; right: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  padding-top: 8px;
+}
+.score { font-size: 22px; font-weight: 700; opacity: .85; }
+.score-sep { opacity: .5; margin: 0 6px; }
+.timer { font-size: 18px; color: var(--muted); margin-top: 2px; }
+
+.center-msg {
+  position: absolute;
+  top: 50%; left: 0; right: 0;
+  transform: translateY(-50%);
+  text-align: center;
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--text);
+  text-shadow: 0 2px 12px rgba(0,0,0,.6);
+  z-index: 6;
+  pointer-events: none;
+}
+.center-msg.goal {
+  font-size: 56px;
+  color: #ffd76b;
+  animation: goalpop .5s ease-out;
+}
+@keyframes goalpop {
+  0%   { transform: translateY(-50%) scale(.2); opacity: 0; }
+  55%  { transform: translateY(-50%) scale(1.25); opacity: 1; }
+  100% { transform: translateY(-50%) scale(1); opacity: 1; }
+}
+
+/* Skor sayisi degisince zipla */
+.score span { display: inline-block; }
+.score span.pop {
+  animation: scorepop .42s ease-out;
+  color: var(--accent);
+}
+@keyframes scorepop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.7); }
+  100% { transform: scale(1); }
+}
+
+.mute-btn {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 6px);
+  right: calc(env(safe-area-inset-right) + 10px);
+  z-index: 7;
+  width: 40px; height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(12,37,54,.6);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+}

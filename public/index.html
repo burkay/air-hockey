@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0b1d2a" />
+  <title>Air Hockey</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- LOBI -->
+  <section id="screen-lobby" class="screen active">
+    <div class="panel">
+      <h1>Air Hockey</h1>
+      <p class="subtitle">Arkadasinla uzaktan oyna</p>
+
+      <div id="lobby-home">
+        <button class="btn primary" data-action="show-ai">Bilgisayara Karsi</button>
+        <button class="btn" data-action="show-create">Arkadasinla: Oyun Kur</button>
+        <button class="btn" data-action="show-join">Arkadasinla: Katil</button>
+        <div class="skin-row">
+          <span class="skin-label">Gorunum</span>
+          <button type="button" class="skin-btn" data-skin="neon">Neon</button>
+          <button type="button" class="skin-btn" data-skin="arcade">Arcade</button>
+        </div>
+        <div class="skin-row">
+          <span class="skin-label">Puck</span>
+          <button type="button" class="skin-btn" data-puck="small">Kucuk</button>
+          <button type="button" class="skin-btn" data-puck="med">Orta</button>
+          <button type="button" class="skin-btn" data-puck="large">Buyuk</button>
+        </div>
+      </div>
+
+      <form id="form-ai" class="lobby-form hidden">
+        <fieldset class="rules">
+          <legend>Mac kurali</legend>
+          <label class="radio"><input type="radio" name="ai-rules" value="first7" checked /> Ilk 7 sayi kazanir</label>
+          <label class="radio"><input type="radio" name="ai-rules" value="first11" /> Ilk 11 sayi kazanir</label>
+          <label class="radio"><input type="radio" name="ai-rules" value="timed" /> Sureli (2 dakika)</label>
+        </fieldset>
+        <fieldset class="rules">
+          <legend>Zorluk</legend>
+          <label class="radio"><input type="radio" name="ai-diff" value="easy" /> Kolay</label>
+          <label class="radio"><input type="radio" name="ai-diff" value="normal" checked /> Orta</label>
+          <label class="radio"><input type="radio" name="ai-diff" value="hard" /> Zor</label>
+        </fieldset>
+        <button type="submit" class="btn primary">Basla</button>
+        <button type="button" class="btn ghost" data-action="back">Geri</button>
+      </form>
+
+      <form id="form-create" class="lobby-form hidden">
+        <label>Sifre belirle
+          <input type="text" id="create-password" autocomplete="off"
+                 inputmode="text" placeholder="orn: hokey42" />
+        </label>
+        <fieldset class="rules">
+          <legend>Mac kurali</legend>
+          <label class="radio"><input type="radio" name="rules" value="first7" checked /> Ilk 7 sayi kazanir</label>
+          <label class="radio"><input type="radio" name="rules" value="first11" /> Ilk 11 sayi kazanir</label>
+          <label class="radio"><input type="radio" name="rules" value="timed" /> Sureli (2 dakika)</label>
+        </fieldset>
+        <button type="submit" class="btn primary">Kur</button>
+        <button type="button" class="btn ghost" data-action="back">Geri</button>
+      </form>
+
+      <form id="form-join" class="lobby-form hidden">
+        <label>Arkadasinin sifresi
+          <input type="text" id="join-password" autocomplete="off"
+                 inputmode="text" placeholder="sifreyi gir" />
+        </label>
+        <button type="submit" class="btn primary">Katil</button>
+        <button type="button" class="btn ghost" data-action="back">Geri</button>
+      </form>
+
+      <p id="lobby-error" class="error" role="alert"></p>
+    </div>
+  </section>
+
+  <!-- BEKLEME -->
+  <section id="screen-wait" class="screen">
+    <div class="panel">
+      <h2>Arkadasin bekleniyor...</h2>
+      <p>Su sifreyi arkadasina ver:</p>
+      <div id="wait-password" class="code"></div>
+      <p class="subtitle">O "Oyuna Katil" deyip bu sifreyi girince oyun baslar.</p>
+      <button class="btn ghost" data-action="cancel-wait">Iptal</button>
+    </div>
+  </section>
+
+  <!-- OYUN -->
+  <section id="screen-game" class="screen">
+    <div id="hud">
+      <div class="score">
+        <span id="score-top">0</span>
+        <span class="score-sep">:</span>
+        <span id="score-bottom">0</span>
+      </div>
+      <div id="timer" class="timer hidden">2:00</div>
+    </div>
+    <canvas id="board"></canvas>
+    <div id="center-msg" class="center-msg"></div>
+    <button id="mute-btn" class="mute-btn" aria-label="Ses">🔊</button>
+  </section>
+
+  <!-- BITIS -->
+  <section id="screen-end" class="screen">
+    <div class="panel">
+      <h2 id="end-title">Mac bitti</h2>
+      <div id="end-score" class="code"></div>
+      <button class="btn primary" data-action="rematch">Yeniden Oyna</button>
+      <button class="btn ghost" data-action="to-lobby">Lobiye Don</button>
+      <p id="end-note" class="subtitle"></p>
+    </div>
+  </section>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/net.js"></script>
+  <script src="js/sfx.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
