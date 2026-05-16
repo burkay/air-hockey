@@ -26,9 +26,12 @@ iPhone tarayıcısından air hockey. İki mod:
 
 ## Oyun dinamikleri (game.js sabitleri) — gerçekçi model
 - Çarpışma: mallet = el kontrollü → sonsuz kütle. `collide()` bağıl normal
-  hızını `PADDLE_E` (0.92) restitution ile yansıtır; momentum aktarımı bu
-  modelden doğal gelir (yapay hız ekleme YOK). Puck sürtünmesiz → teğetsel
-  bileşen değişmez (gerçekçi air hockey, "english" yok).
+  hızını `PADDLE_E` (0.92) restitution ile yansıtır (eski yapay 0.4·padV
+  hilesi YOK; momentum modelden doğal gelir). Puck sürtünmesiz → teğetsel
+  bileşen değişmez. **Süpürmeli (swept)** ve detayı "Ağ / netcode"da.
+- **Yapışma önleyici:** temas sonrası puck DAİMA dışa `MIN_OUT` (30) hız
+  alır → yavaş puck duran paddle'a yapışmaz (takılma + ses spam'i olmazdı).
+  `pend.hit`/ses yalnız gerçek vuruşta (yaklaşırken, `vn<0`); yaslanmada yok.
 - `FRICTION=0.9997` (adım/120Hz) ≈ %3.5/sn hava direnci.
 - `WALL_E=0.90` ray restitution'ı (bir miktar enerji kaybı).
 - `MAX_SPD=240` tavan (tünelleme/absürt hız engeli). **Hız tabanı YOK** —
@@ -106,8 +109,9 @@ iPhone tarayıcısından air hockey. İki mod:
 - Misafir görünümü 180° döndürülür (`toView`/`fromView`); ikisi de alt kaleyi savunur.
 - Kod tanımlayıcıları İngilizce, yorumlar Türkçe (ASCII).
 - Oda anahtarı = şifrenin kendisi. Aynı şifreyle aktif oda varsa kurma reddedilir.
-- Socket.IO olayları: `create_room`/`join_room`/`state`/`input`/`rematch`/
-  `rematch_request`/`peer_joined`/`peer_left`/`error_msg`.
+- Socket.IO olayları: `create_room`/`join_room`/`resume_room`/`state`/`input`/
+  `rematch`/`rematch_request`/`leave_room`/`peer_joined`/`peer_left`/
+  `peer_dropped`/`peer_back`/`resumed`/`room_created`/`joined`/`error_msg`.
 - Dağıtım: yerel PC + **Tailscale Funnel** (`tailscale funnel --bg 3000`)
   ya da `PORT` env + `npm start` ile herhangi bir kalıcı WebSocket Node
   host. Statik-only (GitHub Pages/Vercel/Netlify) uygun değil.
