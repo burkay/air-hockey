@@ -14,8 +14,8 @@ const Net = (() => {
     on(event, fn) {
       (handlers[event] = handlers[event] || []).push(fn);
     },
-    createRoom(password, rules) {
-      socket.emit('create_room', { password, rules });
+    createRoom(password, rules, skin, puck) {
+      socket.emit('create_room', { password, rules, skin, puck });
     },
     joinRoom(password) {
       socket.emit('join_room', { password });

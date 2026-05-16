@@ -24,6 +24,8 @@ app.get('/healthz', (_req, res) => res.send('ok'));
 const rooms = new Map();
 
 const VALID_RULES = new Set(['first7', 'first11', 'timed']);
+const VALID_SKINS = new Set(['neon', 'arcade']);
+const VALID_PUCK = new Set(['small', 'med', 'large']);
 
 function normalizePassword(p) {
   return (typeof p === 'string' ? p : '').trim();
@@ -35,6 +37,8 @@ io.on('connection', (socket) => {
   socket.on('create_room', (payload = {}) => {
     const password = normalizePassword(payload.password);
     const rules = VALID_RULES.has(payload.rules) ? payload.rules : 'first7';
+    const skin = VALID_SKINS.has(payload.skin) ? payload.skin : 'neon';
+    const puck = VALID_PUCK.has(payload.puck) ? payload.puck : 'med';
 
     if (!password) {
       socket.emit('error_msg', { code: 'bad_password', message: 'Lutfen bir sifre gir.' });
@@ -50,12 +54,12 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const room = { hostId: socket.id, guestId: null, rules };
+    const room = { hostId: socket.id, guestId: null, rules, skin, puck };
     rooms.set(password, room);
     socket.join(password);
     socket.data = { room: password, role: 'host' };
 
-    socket.emit('room_created', { password, rules });
+    socket.emit('room_created', { password, rules, skin, puck });
   });
 
   socket.on('join_room', (payload = {}) => {
@@ -78,7 +82,7 @@ io.on('connection', (socket) => {
     socket.join(password);
     socket.data = { room: password, role: 'guest' };
 
-    socket.emit('joined', { rules: room.rules });
+    socket.emit('joined', { rules: room.rules, skin: room.skin, puck: room.puck });
     io.to(room.hostId).emit('peer_joined');
   });
 

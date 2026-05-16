@@ -1,7 +1,7 @@
 // Akis kontrolu: lobi -> bekleme -> oyun -> bitis ve ag olaylari.
 
 (() => {
-  const session = { role: null, password: '', rules: 'first7', ai: false, difficulty: 'normal' };
+  const session = { role: null, password: '', rules: 'first7', ai: false, difficulty: 'normal', skin: 'neon', puck: 'med' };
   const canvas = UI.$('board');
 
   Game.init(canvas, {
@@ -41,8 +41,18 @@
   function applyPuck(size) {
     const s = (size === 'small' || size === 'large') ? size : 'med';
     try { localStorage.setItem('ah_puck', s); } catch (e) {}
+    session.puck = s;
     Game.setPuckSize(s);
     UI.markPuck(s);
+  }
+
+  // Misafir: maca KURANIN gorunum+puck'ini uygula (kendi tercihini
+  // localStorage'da bozmadan; sadece bu mac icin)
+  function useMatchLook(skin, puck) {
+    const sk = skin === 'arcade' ? 'arcade' : 'neon';
+    Game.setSkin(sk);
+    document.body.classList.toggle('skin-arcade', sk === 'arcade');
+    Game.setPuckSize(puck);   // gecersizse setPuckSize 'med'e duser
   }
 
   function selectedRules() {
@@ -53,6 +63,7 @@
   function applySkin(name) {
     const sk = name === 'arcade' ? 'arcade' : 'neon';
     try { localStorage.setItem('ah_skin', sk); } catch (e) {}
+    session.skin = sk;
     Game.setSkin(sk);
     UI.markSkin(sk);
     document.body.classList.toggle('skin-arcade', sk === 'arcade');
@@ -107,7 +118,7 @@
     session.ai = false;
     session.password = pw;
     session.rules = selectedRules();
-    Net.createRoom(pw, session.rules);
+    Net.createRoom(pw, session.rules, session.skin, session.puck);
   });
 
   UI.$('form-join').addEventListener('submit', (ev) => {
@@ -136,6 +147,7 @@
   Net.on('joined', (d) => {
     session.role = 'guest';
     session.rules = d.rules;
+    useMatchLook(d.skin, d.puck);   // kuranin gorunum + puck'i gecerli
     enterGame({ role: 'guest', rules: d.rules });
   });
 
