@@ -69,5 +69,13 @@ const UI = (() => {
       b.classList.toggle('active', b.dataset.puck === size));
   }
 
-  return { $, show, lobbyMode, lobbyError, waitPassword, hud, resetScores, message, endScreen, markSkin, markPuck };
+  // Baglanti durum bildirimi (game render'in dokunmadigi ayri eleman)
+  function netMsg(txt) {
+    const el = $('netmsg');
+    if (!el) return;
+    el.textContent = txt || '';
+    el.classList.toggle('show', !!txt);
+  }
+
+  return { $, show, lobbyMode, lobbyError, waitPassword, hud, resetScores, message, endScreen, markSkin, markPuck, netMsg };
 })();

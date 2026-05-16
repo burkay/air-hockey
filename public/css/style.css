@@ -193,6 +193,26 @@ body.skin-arcade #screen-game { background: #05070d; }
   100% { transform: scale(1); }
 }
 
+.netmsg {
+  position: absolute;
+  left: 50%;
+  top: calc(env(safe-area-inset-top) + 44px);
+  transform: translateX(-50%);
+  z-index: 7;
+  max-width: 88vw;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(255, 93, 115, .92);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+  display: none;
+}
+.netmsg.show { display: block; }
+
 .mute-btn {
   position: absolute;
   top: calc(env(safe-area-inset-top) + 6px);

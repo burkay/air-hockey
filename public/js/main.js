@@ -105,6 +105,7 @@
     const pw = UI.$('create-password').value.trim();
     if (!pw) { UI.lobbyError('Lutfen bir sifre gir.'); return; }
     session.ai = false;
+    session.password = pw;
     session.rules = selectedRules();
     Net.createRoom(pw, session.rules);
   });
@@ -114,6 +115,7 @@
     const pw = UI.$('join-password').value.trim();
     if (!pw) { UI.lobbyError('Lutfen sifreyi gir.'); return; }
     session.ai = false;
+    session.password = pw;
     Net.joinRoom(pw);
   });
 
@@ -142,7 +144,17 @@
     UI.lobbyError(d && d.message ? d.message : 'Bir hata olustu.');
   });
 
+  // Rakip GECICI koptu (grace icinde): oyun durmaz, sadece bilgi ver.
+  Net.on('peer_dropped', () => {
+    if (!session.ai) UI.netMsg('Rakip baglantisi koptu, bekleniyor...');
+  });
+  // Rakip geri geldi.
+  Net.on('peer_back', () => UI.netMsg(''));
+  // Kendi yeniden baglanmamiz onaylandi.
+  Net.on('resumed', () => UI.netMsg(''));
+
   Net.on('peer_left', (d) => {
+    UI.netMsg('');
     Game.stop();
     if (d && d.who === 'guest' && session.role === 'host') {
       // Misafir ayrildi: oda ayni sifreyle bekliyor
@@ -168,10 +180,16 @@
     Net.rematch();
   });
 
-  // Baglanti durumu
+  // Baglanti durumu + otomatik yeniden katilma
   Net.socket.on('disconnect', () => {
-    if (!session.ai && UI.$('screen-game').classList.contains('active')) {
-      UI.message('Baglanti koptu, yeniden baglaniliyor...');
+    if (!session.ai && session.role) {
+      UI.netMsg('Baglanti koptu, yeniden baglaniliyor...');
+    }
+  });
+  Net.socket.on('connect', () => {
+    // Oturum varsa bu bir YENIDEN baglanma -> eski yeri geri al.
+    if (!session.ai && session.role && session.password) {
+      Net.resume(session.password, session.role);
     }
   });
 

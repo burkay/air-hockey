@@ -76,9 +76,11 @@ const Game = (() => {
   let countdown = 0, pendingServe = 'random';   // saniye cinsinden kalan sure
   let timeLeft = 120;
 
-  // Misafir tarafinda yumusatma hedefleri
-  let tgtPuck = { x: W / 2, y: H / 2 };
+  // Misafir: yetkili puck (hiziyla ekstrapole edilir) + rakip paddle hedefi
+  let netPuck = { x: W / 2, y: H / 2, vx: 0, vy: 0 };
   let tgtRemote = { x: W / 2, y: H * 0.18 };
+  // Host: misafir paddle'i icin yumusatma hedefi (ag girdisinden)
+  let tgtGuest = { x: W / 2, y: H * 0.18 };
 
   let lastSend = 0;
   let gameOverFired = false;
@@ -107,8 +109,9 @@ const Game = (() => {
     countdown = 1.5;
     timeLeft = 120;
     gameOverFired = false;
-    tgtPuck = { x: W / 2, y: H / 2 };
+    netPuck = { x: W / 2, y: H / 2, vx: 0, vy: 0 };
     tgtRemote = { x: W / 2, y: H * 0.18 };
+    tgtGuest = { x: W / 2, y: H * 0.18 };
     pend = { hit: false, wall: false };
     sendFx = {};
     fx.goalLeft = 0; fx.side = null; fx.shake = 0; fx.parts = [];
@@ -398,7 +401,7 @@ const Game = (() => {
   // --- Ag ---
   function maybeSend(now) {
     if (ai) return;                 // tek kisilik mod: ag yok
-    if (now - lastSend < 33) return;
+    if (now - lastSend < 16) return; // ~60Hz (eskiden 30Hz -> daha az gecikme)
     lastSend = now;
     if (role === 'host') {
       let f = null;
@@ -415,17 +418,17 @@ const Game = (() => {
     }
   }
 
-  // Host: misafir paddle girdisi
+  // Host: misafir paddle girdisi -> hedef (her karede yumusatilir)
   function handleInput(d) {
     if (ai || role !== 'host' || !d) return;
-    pGuest.x = Math.max(MR, Math.min(W - MR, d.x));
-    pGuest.y = Math.max(MR, Math.min(H / 2, d.y));
+    tgtGuest.x = Math.max(MR, Math.min(W - MR, d.x));
+    tgtGuest.y = Math.max(MR, Math.min(H / 2, d.y));
   }
 
-  // Misafir: host'un yetkili durumu
+  // Misafir: host'un yetkili durumu (puck hiziyla ekstrapole edilir)
   function handleState(d) {
     if (role !== 'guest' || !d) return;
-    tgtPuck = { x: d.p.x, y: d.p.y };
+    netPuck = { x: d.p.x, y: d.p.y, vx: d.p.vx, vy: d.p.vy };
     tgtRemote = { x: d.h.x, y: d.h.y };
     scoreHost = d.sh; scoreGuest = d.sg;
     phase = d.ph; timeLeft = d.t; winner = d.w;
@@ -453,6 +456,13 @@ const Game = (() => {
       lastT = now;
 
       if (role === 'host') {
+        // Misafir paddle'ini hedefe yumusat (ag girdisini akiciya cevirir;
+        // fizik bu yumusatilmis konumu kullanir -> takilmasiz carpisma).
+        if (!ai) {
+          const a = Math.min(1, dt * 22);
+          pGuest.x += (tgtGuest.x - pGuest.x) * a;
+          pGuest.y += (tgtGuest.y - pGuest.y) * a;
+        }
         // sayac
         if (mode === 'timed' && phase !== 'over') {
           timeLeft -= dt;
@@ -473,12 +483,20 @@ const Game = (() => {
         if (pend.hit) { if (typeof Sfx !== 'undefined') Sfx.hit(); sendFx.h = true; pend.hit = false; }
         if (pend.wall) { if (typeof Sfx !== 'undefined') Sfx.wall(); sendFx.w = true; pend.wall = false; }
       } else {
-        // misafir: alinan duruma dogru yumusatma (ag titremesini gizler)
-        const k = 0.35;
-        puck.x += (tgtPuck.x - puck.x) * k;
-        puck.y += (tgtPuck.y - puck.y) * k;
-        pHost.x += (tgtRemote.x - pHost.x) * k;
-        pHost.y += (tgtRemote.y - pHost.y) * k;
+        // Misafir: yetkili puck'i HIZIYLA ekstrapole et (dead-reckoning) ->
+        // 30/60Hz guncellemeler arasinda puck gercek zamanli akar, gecikme
+        // hissi cok azalir. Sonra cizilen puck'i ona hizla yaklastir.
+        netPuck.x += netPuck.vx * dt;
+        netPuck.y += netPuck.vy * dt;
+        netPuck.x = Math.max(0, Math.min(W, netPuck.x));
+        netPuck.y = Math.max(0, Math.min(H, netPuck.y));
+        const ap = Math.min(1, dt * 30);
+        puck.x += (netPuck.x - puck.x) * ap;
+        puck.y += (netPuck.y - puck.y) * ap;
+        // Rakip (host) paddle: hiz yok -> hedefe snappy yumusatma
+        const ak = Math.min(1, dt * 22);
+        pHost.x += (tgtRemote.x - pHost.x) * ak;
+        pHost.y += (tgtRemote.y - pHost.y) * ak;
       }
 
       maybeSend(now);

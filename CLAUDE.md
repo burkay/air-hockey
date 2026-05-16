@@ -81,6 +81,18 @@ iPhone tarayıcısından air hockey. İki mod:
   açar/koyultur; `ring()` kontur. `createRadialGradient` yoksa düz renk
   fallback (headless güvenli). Renk skin pad renginden gelir.
 
+## Ağ / netcode
+- Gönderim ~60Hz (`maybeSend` 16ms). Misafir: puck **hızıyla ekstrapole**
+  edilir (`netPuck` + dead-reckoning), çizilen puck ona snappy yaklaşır;
+  rakip paddle fps-bağımsız `min(1,dt*22)` yumuşatma. Host: misafir paddle
+  `tgtGuest`'e `min(1,dt*22)` yumuşatılır (fizik bunu kullanır). AI modunda
+  host yumuşatma `!ai` ile atlanır.
+- **Yeniden bağlanma:** kopma kalıcı bozmaz. Sunucu disconnect'te ~25sn
+  **grace**; `peer_dropped` (geçici, oyun durmaz) → grace dolarsa `peer_left`
+  (terminal). İstemci `connect` (reconnect) → `Net.resume(password, role)` →
+  sunucu yeri geri verir → `peer_back`/`resumed`. Bilerek çıkış (`leave_room`)
+  anında `peer_left`. Durum bildirimi ayrı `#netmsg` (game render dokunmaz).
+
 ## Konvansiyonlar / dikkat
 - Sanal masa koordinatı `W=100 x H=200` (dikey). Pixel'e letterbox ile ölçeklenir.
 - Misafir görünümü 180° döndürülür (`toView`/`fromView`); ikisi de alt kaleyi savunur.

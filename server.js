@@ -106,29 +106,88 @@ io.on('connection', (socket) => {
     if (p) socket.to(p).emit('rematch');
   });
 
-  socket.on('leave_room', () => {
-    cleanup(socket);
+  // Yeniden baglanma: kopan istemci yeni socket ile eski yerini geri alir.
+  // Boylece kisa mobil kopmalar maci kalici bozmaz (skor/oyun korunur).
+  socket.on('resume_room', (payload = {}) => {
+    const password = normalizePassword(payload.password);
+    const role = payload.role === 'host' ? 'host'
+               : payload.role === 'guest' ? 'guest' : null;
+    const room = rooms.get(password);
+    if (!room || !role) {
+      socket.emit('peer_left', { who: 'host' });   // oda kapanmis -> lobiye
+      return;
+    }
+    if (role === 'host') room.hostId = socket.id;
+    else room.guestId = socket.id;
+    socket.join(password);
+    socket.data = { room: password, role };
+    if (room.grace && room.grace[role]) {
+      clearTimeout(room.grace[role]);
+      room.grace[role] = null;
+    }
+    const peerId = role === 'host' ? room.guestId : room.hostId;
+    if (peerId) io.to(peerId).emit('peer_back', { who: role });
+    socket.emit('resumed');
   });
 
-  socket.on('disconnect', () => {
-    cleanup(socket);
-  });
+  socket.on('leave_room', () => cleanupNow(socket));   // bilerek cikis: aninda
+  socket.on('disconnect', () => scheduleCleanup(socket)); // kopma: toleransli
 
-  function cleanup(sock) {
+  // Kopmada hemen kapatma: peer'a "bekleniyor" de, ~25sn grace ver.
+  function scheduleCleanup(sock) {
     const password = sock.data && sock.data.room;
     if (!password) return;
     const room = rooms.get(password);
     if (!room) return;
+    let role = null;
+    if (room.hostId === sock.id) role = 'host';
+    else if (room.guestId === sock.id) role = 'guest';
+    if (!role) return;
 
-    if (room.hostId === sock.id) {
-      // Host gitti: oda kapanir, misafir bilgilendirilir
+    const peerId = role === 'host' ? room.guestId : room.hostId;
+    if (peerId) io.to(peerId).emit('peer_dropped', { who: role });
+
+    room.grace = room.grace || {};
+    if (room.grace[role]) clearTimeout(room.grace[role]);
+    const deadId = sock.id;
+    room.grace[role] = setTimeout(() => realCleanup(password, role, deadId), 25000);
+    sock.data = {};
+  }
+
+  // Grace dolunca (ve yer geri alinmadiysa) gercek kapatma.
+  function realCleanup(password, role, deadId) {
+    const room = rooms.get(password);
+    if (!room) return;
+    if (role === 'host' && room.hostId !== deadId) return;   // geri alinmis
+    if (role === 'guest' && room.guestId !== deadId) return;  // geri alinmis
+    if (role === 'host') {
       if (room.guestId) io.to(room.guestId).emit('peer_left', { who: 'host' });
+      if (room.grace) {
+        clearTimeout(room.grace.host); clearTimeout(room.grace.guest);
+      }
       rooms.delete(password);
-    } else if (room.guestId === sock.id) {
-      // Misafir gitti: oda durur, host bekleme ekranina doner,
-      // ayni sifreyle yeni misafir katilabilir
+    } else {
       room.guestId = null;
       if (room.hostId) io.to(room.hostId).emit('peer_left', { who: 'guest' });
+    }
+  }
+
+  // Bilerek cikista aninda kapat (grace yok).
+  function cleanupNow(sock) {
+    const password = sock.data && sock.data.room;
+    if (!password) return;
+    const room = rooms.get(password);
+    if (room) {
+      if (room.hostId === sock.id) {
+        if (room.guestId) io.to(room.guestId).emit('peer_left', { who: 'host' });
+        if (room.grace) {
+          clearTimeout(room.grace.host); clearTimeout(room.grace.guest);
+        }
+        rooms.delete(password);
+      } else if (room.guestId === sock.id) {
+        room.guestId = null;
+        if (room.hostId) io.to(room.hostId).emit('peer_left', { who: 'guest' });
+      }
     }
     sock.data = {};
   }

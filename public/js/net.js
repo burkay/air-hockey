@@ -20,6 +20,9 @@ const Net = (() => {
     joinRoom(password) {
       socket.emit('join_room', { password });
     },
+    resume(password, role) {
+      socket.emit('resume_room', { password, role });
+    },
     sendState(data) {
       socket.emit('state', data);
     },
