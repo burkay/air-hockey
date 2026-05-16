@@ -231,21 +231,23 @@ const Game = (() => {
   // --- Fizik (yalnizca host) ---
   function integrate() {
     if (ai) aiMove();
-    // paddle hizlari (carpisma itkisi icin)
-    const hv = { x: (pHost.x - pHostPrev.x) / STEP, y: (pHost.y - pHostPrev.y) / STEP };
-    const gv = { x: (pGuest.x - pGuestPrev.x) / STEP, y: (pGuest.y - pGuestPrev.y) / STEP };
-    pHostPrev = { ...pHost };
-    pGuestPrev = { ...pGuest };
+    // Bu adimin baslangic (eski) paddle konumlari = supurmeli carpisma icin
+    const hq0 = pHostPrev, gq0 = pGuestPrev;
+    const hv = { x: (pHost.x - hq0.x) / STEP, y: (pHost.y - hq0.y) / STEP };
+    const gv = { x: (pGuest.x - gq0.x) / STEP, y: (pGuest.y - gq0.y) / STEP };
+    pHostPrev = { x: pHost.x, y: pHost.y };
+    pGuestPrev = { x: pGuest.x, y: pGuest.y };
 
     if (phase !== 'play') return;
 
+    const px0 = puck.x, py0 = puck.y;       // adim oncesi puck konumu
     puck.x += puck.vx * STEP;
     puck.y += puck.vy * STEP;
     puck.vx *= FRICTION;
     puck.vy *= FRICTION;
 
-    collide(pHost, hv);
-    collide(pGuest, gv);
+    collide(pHost, hv, hq0, px0, py0);
+    collide(pGuest, gv, gq0, px0, py0);
 
     // yatay duvarlar
     if (puck.x - PR < 0) { puck.x = PR; puck.vx = Math.abs(puck.vx) * WALL_E; pend.wall = true; }
@@ -295,21 +297,48 @@ const Game = (() => {
   // Bagil normal hizi restitution ile yansitilir; momentum aktarimi
   // (paddle'in puck'i itmesi/vurmasi) bu modelden dogal olarak cikar.
   // Puck surtunmesiz oldugu icin tegetsel bilesen degismez (gercekci).
-  function collide(pad, pv) {
-    let dx = puck.x - pad.x, dy = puck.y - pad.y;
-    let d = Math.hypot(dx, dy);
+  // SUPURMELI carpisma: puck (p0->p1) ve paddle (q0->q1) bu adim boyunca
+  // bagil olarak hareket eder; yollari minD'ye girerse vurus sayilir.
+  // Boylece hizli kaydirmada paddle topun "icinden gecmez", isabet eder.
+  function collide(q1, pv, q0, px0, py0) {
     const minD = PR + MR;
-    if (d >= minD) return;
-    if (d < 1e-4) { d = 1e-4; dx = 0; dy = role === 'host' ? -1 : 1; }
-    const nx = dx / d, ny = dy / d;
-    // penetrasyonu duzelt
-    puck.x = pad.x + nx * minD;
-    puck.y = pad.y + ny * minD;
-    // el hizini makul sinirla (touch/ag jitter'i firlatma yapmasin)
+    const ax = px0 - q0.x, ay = py0 - q0.y;          // bagil konum, t=0
+    const bx = puck.x - q1.x, by = puck.y - q1.y;    // bagil konum, t=1
+    const dx = bx - ax, dy = by - ay;
+    const A = dx * dx + dy * dy;
+    let t;
+    if (A < 1e-9) {                                  // bagil hareket yok
+      if (ax * ax + ay * ay >= minD * minD) return;
+      t = 0;
+    } else {
+      const C = ax * ax + ay * ay - minD * minD;
+      if (C <= 0) {
+        t = 0;                                       // zaten ic ice
+      } else {
+        const B = 2 * (ax * dx + ay * dy);
+        const disc = B * B - 4 * A * C;
+        if (disc < 0) return;                        // hic temas etmiyor
+        t = (-B - Math.sqrt(disc)) / (2 * A);        // giris ani
+        if (t < 0 || t > 1) return;                  // bu adim icinde degil
+      }
+    }
+    // Temas anindaki konumlar
+    const qcx = q0.x + (q1.x - q0.x) * t;
+    const qcy = q0.y + (q1.y - q0.y) * t;
+    const pcx = px0 + (puck.x - px0) * t;
+    const pcy = py0 + (puck.y - py0) * t;
+    let nx = pcx - qcx, ny = pcy - qcy;
+    let nl = Math.hypot(nx, ny);
+    if (nl < 1e-4) { nx = 0; ny = role === 'host' ? -1 : 1; nl = 1; }
+    nx /= nl; ny /= nl;
+    // Puck'i temas yuzeyine yerlestir (paddle'in temas anindaki konumu)
+    puck.x = qcx + nx * minD;
+    puck.y = qcy + ny * minD;
+    // El hizini makul sinirla (touch/ag jitter'i firlatma yapmasin)
     let pvx = pv.x, pvy = pv.y;
     const ps = Math.hypot(pvx, pvy);
     if (ps > PADDLE_VMAX) { pvx *= PADDLE_VMAX / ps; pvy *= PADDLE_VMAX / ps; }
-    // restitution'lu impuls (sonsuz kutleli mallet)
+    // Restitution'lu impuls (sonsuz kutleli mallet)
     const vn = (puck.vx - pvx) * nx + (puck.vy - pvy) * ny;
     if (vn < 0) {
       const j = -(1 + PADDLE_E) * vn;
@@ -456,13 +485,10 @@ const Game = (() => {
       lastT = now;
 
       if (role === 'host') {
-        // Misafir paddle'ini hedefe yumusat (ag girdisini akiciya cevirir;
-        // fizik bu yumusatilmis konumu kullanir -> takilmasiz carpisma).
-        if (!ai) {
-          const a = Math.min(1, dt * 22);
-          pGuest.x += (tgtGuest.x - pGuest.x) * a;
-          pGuest.y += (tgtGuest.y - pGuest.y) * a;
-        }
+        // Misafir paddle'i: yetkili konum = en son bildirilen (gecikme
+        // EKLEMEDEN). Hizli kaydirmada da degmesi supurmeli collide ile
+        // saglanir (paddle'in eski->yeni yolu puck'i kesiyorsa vurur).
+        if (!ai) { pGuest.x = tgtGuest.x; pGuest.y = tgtGuest.y; }
         // sayac
         if (mode === 'timed' && phase !== 'over') {
           timeLeft -= dt;

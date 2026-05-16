@@ -83,10 +83,14 @@ iPhone tarayıcısından air hockey. İki mod:
 
 ## Ağ / netcode
 - Gönderim ~60Hz (`maybeSend` 16ms). Misafir: puck **hızıyla ekstrapole**
-  edilir (`netPuck` + dead-reckoning), çizilen puck ona snappy yaklaşır;
-  rakip paddle fps-bağımsız `min(1,dt*22)` yumuşatma. Host: misafir paddle
-  `tgtGuest`'e `min(1,dt*22)` yumuşatılır (fizik bunu kullanır). AI modunda
-  host yumuşatma `!ai` ile atlanır.
+  edilir (`netPuck` + dead-reckoning); rakip paddle fps-bağımsız yumuşatma.
+- **Yetkili misafir paddle gecikmesiz:** host `pGuest = tgtGuest` (yapay
+  yumuşatma YOK — eskiden `dt*22` ~90ms gecikme katıp hızlı kaydırmada
+  ıskalatıyordu).
+- **Süpürmeli (swept) çarpışma** (`collide(q1,pv,q0,px0,py0)`): puck (p0→p1)
+  ve paddle (q0→q1) bağıl yolu minD'ye girerse vuruş — kuadratik giriş anı
+  `t`. Hızlı paddle artık topun içinden geçmez. `integrate` adım öncesi
+  puck (`px0,py0`) ve eski paddle konumlarını (`hq0,gq0`) verir.
 - **Yeniden bağlanma:** kopma kalıcı bozmaz. Sunucu disconnect'te ~25sn
   **grace**; `peer_dropped` (geçici, oyun durmaz) → grace dolarsa `peer_left`
   (terminal). İstemci `connect` (reconnect) → `Net.resume(password, role)` →
