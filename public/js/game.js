@@ -331,21 +331,34 @@ const Game = (() => {
     let nl = Math.hypot(nx, ny);
     if (nl < 1e-4) { nx = 0; ny = role === 'host' ? -1 : 1; nl = 1; }
     nx /= nl; ny /= nl;
-    // Puck'i temas yuzeyine yerlestir (paddle'in temas anindaki konumu)
-    puck.x = qcx + nx * minD;
-    puck.y = qcy + ny * minD;
+    // Puck'i temas yuzeyinin biraz disina koy (tam minD'de kalip her
+    // karede yeniden tetiklenmesin)
+    puck.x = qcx + nx * (minD + 0.1);
+    puck.y = qcy + ny * (minD + 0.1);
     // El hizini makul sinirla (touch/ag jitter'i firlatma yapmasin)
     let pvx = pv.x, pvy = pv.y;
     const ps = Math.hypot(pvx, pvy);
     if (ps > PADDLE_VMAX) { pvx *= PADDLE_VMAX / ps; pvy *= PADDLE_VMAX / ps; }
-    // Restitution'lu impuls (sonsuz kutleli mallet)
+    // Restitution'lu impuls (sonsuz kutleli mallet) - yalniz yaklasiyorsa
     const vn = (puck.vx - pvx) * nx + (puck.vy - pvy) * ny;
+    let realHit = false;
     if (vn < 0) {
       const j = -(1 + PADDLE_E) * vn;
       puck.vx += j * nx;
       puck.vy += j * ny;
+      realHit = true;
     }
-    pend.hit = true;
+    // Yapisma onleyici: puck DAIMA paddle'dan ayrilsin. Yoksa yavas puck
+    // duran paddle'a yapisip her kare yeniden carpisir (takilma + ses spam).
+    const outN = puck.vx * nx + puck.vy * ny;
+    const MIN_OUT = 30;
+    if (outN < MIN_OUT) {
+      const add = MIN_OUT - outN;
+      puck.vx += add * nx;
+      puck.vy += add * ny;
+    }
+    // Ses/efekt yalniz gercek vurusta (yaklasirken) - yaslanmada degil
+    if (realHit) pend.hit = true;
   }
 
   // Gol gorsel + ses efekti (host/AI: score()'da; misafir: handleState'de)
