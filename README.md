@@ -1,8 +1,15 @@
 # Air Hockey — Uzaktan 2 Kişilik (iPhone tarayıcısı)
 
-İki kişinin telefon tarayıcısından, **şifre ile eşleşerek** birbirine karşı
-oynadığı air hockey. Bir kişi oyunu kurup şifre belirler ve maç kuralını seçer
-(ilk 7 / ilk 11 / süreli 2 dk), arkadaşı o şifreyi girip katılır.
+Telefon tarayıcısından air hockey. İki mod:
+
+- **Bilgisayara Karşı:** tek başına AI rakip (Kolay / Orta / Zor), ağ yok.
+- **Arkadaşınla (uzaktan):** **şifre ile eşleşme** — bir kişi oyunu kurup şifre
+  ve maç kuralını seçer (ilk 7 / ilk 11 / süreli 2 dk), arkadaşı o şifreyi
+  girip katılır.
+
+Ek: skin (Neon / Arcade), puck boyutu (Küçük / Orta / Büyük), Web Audio ses
+efektleri, gerçekçi fizik. Kısa ağ kopmaları maçı bozmaz (otomatik yeniden
+bağlanma).
 
 ## Kurulum
 
@@ -17,11 +24,14 @@ Sunucu `http://localhost:3000` adresinde açılır.
 
 ## Nasıl oynanır
 
-1. Bir oyuncu **"Oyun Kur"** der, bir şifre yazar, kuralı seçer, **"Kur"**.
-2. Diğeri **"Oyuna Katıl"** deyip aynı şifreyi girer.
-3. Maç başlar. Parmakla kendi paddle'ını (alt taraf) sürükle. Her oyuncu
-   kendi ekranında **alttaki kaleyi** savunur.
-4. Maç bitince **"Yeniden Oyna"** ile rövanş yapılabilir.
+- **Tek kişilik:** Lobide **"Bilgisayara Karşı"** → kural + zorluk seç → başla.
+- **Arkadaşınla:** Bir oyuncu **"Oyun Kur"** + şifre + kural; diğeri
+  **"Oyuna Katıl"** + aynı şifre.
+- Oyun: parmakla kendi paddle'ını (alt taraf) sürükle; herkes kendi ekranında
+  **alttaki kaleyi** savunur. Maç bitince **"Yeniden Oyna"**.
+- Lobide **Görünüm** (Neon/Arcade) ve **Puck** (Küçük/Orta/Büyük) seçilir;
+  çok oyunculuda **kuranın** seçimi geçerli olur. Sağ üstte **🔊** ile ses
+  aç/kapa (iOS: ilk dokunuştan sonra ses gelir, sessiz anahtarı kapalı olmalı).
 
 ## Test / oynama seçenekleri
 
@@ -45,8 +55,9 @@ Sunucu `http://localhost:3000` adresinde açılır.
 
 - `server.js` — Express + Socket.IO. Yalnızca **eşleştirme + mesaj rölesi**.
 - Fizik **host-authoritative**: oyunu kuran istemci simülasyonu çalıştırır,
-  durumu misafire ~30 Hz yollar; misafir kendi paddle'ını anında oynatır,
-  gerisini yumuşatarak çizer.
+  durumu misafire **~60 Hz** yollar; misafir kendi paddle'ını anında oynatır,
+  puck'ı hızıyla ekstrapole edip (dead-reckoning) yumuşatarak çizer.
+- Çarpışma **süpürmeli (swept)** — hızlı vuruşta paddle topun içinden geçmez.
 - `public/js/game.js` çekirdek (fizik + çizim + rol ayrımı).
 
 ## Proje yapısı
@@ -56,6 +67,7 @@ server.js              Express + Socket.IO röle/eşleştirme
 public/index.html      Ekranlar (lobi/bekleme/oyun/bitiş)
 public/css/style.css   Mobil öncelikli stiller
 public/js/net.js       Socket.IO istemci sarmalayıcı
+public/js/sfx.js       Web Audio ses efektleri (dosyasız)
 public/js/game.js      Fizik + çizim + ağ senkronu
 public/js/ui.js        Ekran geçişleri / DOM yardımcıları
 public/js/main.js      Akış kontrolü ve olay bağlama
