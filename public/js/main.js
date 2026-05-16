@@ -27,7 +27,10 @@
   }
 
   // iOS: ses ilk kullanici hareketinde acilmali (AudioContext)
-  document.addEventListener('pointerdown', () => { Sfx.unlock(); });
+  // iOS: ses, jest icinde acilmali. pointerdown bazi iOS surumlerinde
+  // yetmez; touchend/click daha guvenilir -> hepsine bagla (idempotent).
+  ['pointerdown', 'touchend', 'click'].forEach((ev) =>
+    document.addEventListener(ev, () => Sfx.unlock(), { passive: true }));
 
   const muteBtn = UI.$('mute-btn');
   muteBtn.addEventListener('click', () => {

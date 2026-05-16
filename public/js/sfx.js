@@ -5,6 +5,7 @@ const Sfx = (() => {
   let ctx = null, master = null;
   const last = {};
   let muted = false;
+  let primed = false;
 
   function ensure() {
     if (ctx) return ctx;
@@ -17,9 +18,27 @@ const Sfx = (() => {
     return ctx;
   }
 
+  // Context yeniden askiya alinmis olabilir; cal anindan once devam ettir.
+  function wake(c) {
+    if (c && c.state === 'suspended' && c.resume) c.resume();
+  }
+
+  // Her kullanici hareketinde cagrilir. iOS'ta resume() tek basina cogu
+  // zaman yetmez: jest icinde tek-ornek sessiz buffer calmak ses
+  // hattini gercekten acar (yoksa ses ancak buton tiklayinca gelir).
   function unlock() {
     const c = ensure();
-    if (c && c.state === 'suspended') c.resume();
+    if (!c) return;
+    wake(c);
+    if (primed) return;
+    primed = true;
+    try {
+      const b = c.createBuffer(1, 1, 22050);
+      const s = c.createBufferSource();
+      s.buffer = b;
+      s.connect(c.destination);
+      s.start(0);
+    } catch (e) {}
   }
 
   // ms cinsinden ayni sesi cok sik calma (spam engeli)
@@ -33,6 +52,7 @@ const Sfx = (() => {
   function tone(freq, dur, type, vol, glide, delay) {
     const c = ensure();
     if (!c || muted) return;
+    wake(c);
     const t0 = c.currentTime + (delay || 0);
     const o = c.createOscillator();
     const g = c.createGain();
@@ -49,6 +69,7 @@ const Sfx = (() => {
   function noise(dur, vol, hp) {
     const c = ensure();
     if (!c || muted) return;
+    wake(c);
     const n = Math.floor(c.sampleRate * dur);
     const buf = c.createBuffer(1, n, c.sampleRate);
     const d = buf.getChannelData(0);
