@@ -33,12 +33,32 @@ Sunucu `http://localhost:3000` adresinde açılır.
   - **Geçici tünel (hesapsız):** `npx cloudflared tunnel --url http://localhost:3000`
     komutu çalışırken verilen `https://...trycloudflare.com` linkini arkadaşına
     gönder. (PC açık kalmalı; her çalıştırmada link değişir.)
-  - **Bulut (kalıcı link):** Render / Railway / Fly gibi bir Node host'a yükle.
-    Tek gereken: `npm start` komutu ve `PORT` ortam değişkeni (kod zaten
-    `process.env.PORT` kullanır). WebSocket'i kalıcı destekleyen bir plan seç.
+  - **Bulut (kalıcı link — önerilen):** aşağıdaki Render adımları.
 
-> Vercel/Netlify gibi salt statik veya kısa ömürlü fonksiyon platformları
-> kalıcı WebSocket gerektirdiği için uygun değildir.
+> GitHub Pages / Vercel / Netlify gibi salt statik (veya kısa ömürlü
+> fonksiyon) platformları **uygun değildir** — kalıcı WebSocket sunucusu
+> gerekir.
+
+## Render'a dağıtım (ücretsiz, kalıcı link)
+
+Repo bir `render.yaml` (Blueprint) içerir; Render bunu okuyup servisi
+otomatik kurar. Private repo da desteklenir.
+
+1. https://render.com → **GitHub ile kaydol/giriş yap** (ücretsiz).
+2. Dashboard → **New +** → **Blueprint**.
+3. `air-hockey` reposunu seç (Render erişim isterse onayla) → **Apply**.
+   - `render.yaml`: Node, `npm install` → `npm start`, health `/healthz`,
+     `PORT` Render tarafından otomatik verilir (kod zaten `process.env.PORT`).
+4. İlk derleme ~1-2 dk. Bittiğinde `https://air-hockey-XXXX.onrender.com`
+   linki çıkar. Bu linki iki telefonda aç → biri **Oyun Kur** + şifre,
+   diğeri **Oyuna Katıl** + aynı şifre.
+
+Notlar:
+- **Ücretsiz plan uykuya geçer:** ~15 dk hareketsizlikte durur; sonraki
+  açılış ~30-60 sn (cold start) gecikir. Oynarken sorun olmaz; ilk açılış
+  yavaş olabilir, birkaç saniye bekleyin.
+- Repoya `git push` yapınca Render **otomatik yeniden dağıtır**
+  (`autoDeploy: true`).
 
 ## Mimari (kısa)
 
