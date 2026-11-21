@@ -6,23 +6,25 @@ iPhone tarayıcısından air hockey. İki mod:
 - **Arkadaşınla (uzaktan):** şifre ile eşleşme; kuran + şifre/kural belirler.
 
 ## Teknoloji
-- Backend: Node.js + Express + Socket.IO (sadece eşleştirme + mesaj rölesi).
+- Sunucu YOK: statik site, GitHub Pages'ten yayınlanır (`main` / kök dizin).
+- Çok oyunculu: WebRTC peer-to-peer, PeerJS 1.5.4 (unpkg CDN). PeerJS genel
+  sunucusu yalnız signaling; varsayılan ICE'ta Google STUN + PeerJS TURN var.
 - Frontend: saf JS + HTML5 Canvas. Build adımı / framework yok.
 - Fizik modeli: host-authoritative (kuran istemci simüle eder, durumu yollar).
 
 ## Komutlar
-- `npm install` — bağımlılıklar
-- `npm start` — sunucu (http://localhost:3000, `PORT` env ile değişir)
+- Yerel: `npx http-server -p 8080 -c-1` → http://localhost:8080 (iki sekme).
+- Yayın: `main`'e push → https://burkay.github.io/air-hockey/
+- Mutlak yol (`/js/...`) KULLANMA: Pages alt dizinden (`/air-hockey/`) sunar.
 
 ## Dizin yapısı
-- `server.js` — oda eşleştirme + Socket.IO röle (fizik YOK)
-- `public/js/game.js` — fizik + çizim + host/misafir rol ayrımı (çekirdek)
-- `public/js/sfx.js` — Web Audio ile sentezlenen sesler (dosya yok); `Sfx.unlock()`
+- `js/game.js` — fizik + çizim + host/misafir rol ayrımı (çekirdek)
+- `js/sfx.js` — Web Audio ile sentezlenen sesler (dosya yok); `Sfx.unlock()`
   iOS için ilk dokunuşta çağrılır (main.js global pointerdown)
-- `public/js/net.js` — Socket.IO istemci sarmalayıcı
-- `public/js/ui.js` — ekran geçişleri / DOM yardımcıları
-- `public/js/main.js` — akış kontrolü, ağ olayları
-- `public/index.html`, `public/css/style.css` — ekranlar ve mobil yerleşim
+- `js/net.js` — WebRTC/PeerJS bağlantı katmanı (oda, heartbeat, yeniden bağlanma)
+- `js/ui.js` — ekran geçişleri / DOM yardımcıları
+- `js/main.js` — akış kontrolü, ağ olayları
+- `index.html`, `css/style.css` — ekranlar ve mobil yerleşim
 
 ## Oyun dinamikleri (game.js sabitleri) — gerçekçi model
 - Çarpışma: mallet = el kontrollü → sonsuz kütle. `collide()` bağıl normal
@@ -98,21 +100,30 @@ iPhone tarayıcısından air hockey. İki mod:
   ve paddle (q0→q1) bağıl yolu minD'ye girerse vuruş — kuadratik giriş anı
   `t`. Hızlı paddle artık topun içinden geçmez. `integrate` adım öncesi
   puck (`px0,py0`) ve eski paddle konumlarını (`hq0,gq0`) verir.
-- **Yeniden bağlanma:** kopma kalıcı bozmaz. Sunucu disconnect'te ~25sn
-  **grace**; `peer_dropped` (geçici, oyun durmaz) → grace dolarsa `peer_left`
-  (terminal). İstemci `connect` (reconnect) → `Net.resume(password, role)` →
-  sunucu yeri geri verir → `peer_back`/`resumed`. Bilerek çıkış (`leave_room`)
-  anında `peer_left`. Durum bildirimi ayrı `#netmsg` (game render dokunmaz).
+- **Bağlantı (net.js):** host PeerJS kimliği = `bk-airhockey-v2-` + şifre
+  özeti (`roomId`); misafir rastgele kimlikle o kimliği arar. Tek veri kanalı,
+  `reliable` + `json`. Mesajlar `{t}`: `s` state, `i` input, `rm`/`rq`
+  rematch, `hello` (host→misafir: kural/skin/puck), `full`, `bye`, `ping`.
+- **Kopma algılama:** WebRTC `close` geç gelebilir → heartbeat: 500ms boşta
+  `ping`, 4sn veri yoksa kopmuş say. iOS arka planda timer'lar donar; dönünce
+  sessizlik yakalanır.
+- **Yeniden bağlanma:** ~25sn **grace**; `peer_dropped` (geçici, oyun durmaz)
+  → grace dolarsa `peer_left` (terminal). Misafir 2sn'de bir yeniden arar;
+  host aynı misafiri `metadata.token` ile tanır → `peer_back`. Başka token
+  gelirse `full`. Signaling kopması (`disconnected`) → `peer.reconnect()`
+  (aynı kimlik, açık kanal etkilenmez). Bilerek çıkış (`bye`) anında
+  `peer_left`. Durum bildirimi ayrı `#netmsg` (game render dokunmaz).
 
 ## Konvansiyonlar / dikkat
 - Sanal masa koordinatı `W=100 x H=200` (dikey). Pixel'e letterbox ile ölçeklenir.
 - Misafir görünümü 180° döndürülür (`toView`/`fromView`); ikisi de alt kaleyi savunur.
 - Kod tanımlayıcıları İngilizce, yorumlar Türkçe (ASCII).
-- Oda anahtarı = şifrenin kendisi. Aynı şifreyle aktif oda varsa kurma reddedilir.
-- Socket.IO olayları: `create_room`/`join_room`/`resume_room`/`state`/`input`/
-  `rematch`/`rematch_request`/`leave_room`/`peer_joined`/`peer_left`/
-  `peer_dropped`/`peer_back`/`resumed`/`room_created`/`joined`/`error_msg`.
-- Dağıtım: yerel PC + **Tailscale Funnel** (`tailscale funnel --bg 3000`)
-  ya da `PORT` env + `npm start` ile herhangi bir kalıcı WebSocket Node
-  host. Statik-only (GitHub Pages/Vercel/Netlify) uygun değil.
-  (Render iptal edildi; `render.yaml` kaldırıldı.)
+- Oda = şifre özeti. Aynı şifreyle açık oda varsa PeerJS `unavailable-id` →
+  "şifre kullanımda".
+- `Net` olayları (main.js/game.js dinler): `room_created`/`joined`/
+  `peer_joined`/`peer_left`/`peer_dropped`/`peer_back`/`state`/`input`/
+  `rematch`/`rematch_request`/`error_msg`.
+- Eski Socket.IO sunucusu + Render kaldırıldı (gecikme: tüm trafik uzak
+  sunucudan geçiyordu). Geri getirme; P2P daha hızlı.
+- Repo public. Commit'ler GitHub noreply e-postasıyla; gerçek e-posta,
+  anahtar ya da servis URL'si koyma.

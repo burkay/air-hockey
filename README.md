@@ -11,16 +11,13 @@ Ek: skin (Neon / Arcade), puck boyutu (Küçük / Orta / Büyük), Web Audio ses
 efektleri, gerçekçi fizik. Kısa ağ kopmaları maçı bozmaz (otomatik yeniden
 bağlanma).
 
-## Kurulum
+## Oyna
 
-Node.js 16+ gerekir.
+**https://burkay.github.io/air-hockey/** — kurulum yok, sunucu yok.
 
-```bash
-npm install
-npm start
-```
-
-Sunucu `http://localhost:3000` adresinde açılır.
+İki kişilik mod **WebRTC ile doğrudan (peer-to-peer)** bağlanır: veri iki
+telefon arasında gider, araya uzak bir sunucu girmez. Bu yüzden iki oyuncu
+birbirine yakınsa (ör. Sofya ↔ İstanbul) gecikme düşüktür.
 
 ## Nasıl oynanır
 
@@ -32,43 +29,39 @@ Sunucu `http://localhost:3000` adresinde açılır.
 - Lobide **Görünüm** (Neon/Arcade) ve **Puck** (Küçük/Orta/Büyük) seçilir;
   çok oyunculuda **kuranın** seçimi geçerli olur. Sağ üstte **🔊** ile ses
   aç/kapa (iOS: ilk dokunuştan sonra ses gelir, sessiz anahtarı kapalı olmalı).
+- "Rakibe bağlanılamadı" hatası: bazı mobil operatörler doğrudan bağlantıyı
+  engeller; birinizin Wi-Fi'ye (ya da mobil veriye) geçmesi genelde çözer.
 
-## Test / oynama seçenekleri
+## Yerelde çalıştırma
 
-- **Aynı bilgisayar:** İki tarayıcı sekmesi aç (biri kurar, biri katılır).
-- **Aynı Wi-Fi:** Telefonlardan `http://<PC-LAN-IP>:3000` adresini açın.
-  Windows'ta LAN IP için: `ipconfig` → "IPv4 Address".
-- **Farklı internetler (gerçek uzaktan oyun):** Sunucu PC'de `npm start` ile
-  çalışır; internetten erişim için (PC açık + sunucu çalışır olmalı):
-  - **Tailscale Funnel (arkadaş kurulum yapmadan):**
-    `tailscale funnel --bg 3000` → çıkan herkese açık `https://<ad>.ts.net/`
-    linkini arkadaşına gönder. Kapatmak: `tailscale funnel --https=443 off`.
-  - **Tailscale tailnet (en düşük gecikme):** arkadaş Tailscale kurup
-    tailnet'e katılır, `http://<tailscale-ip>:3000` açar.
-  - **Geçici tünel (hesapsız):** `npx cloudflared tunnel --url http://localhost:3000`.
+Build yok; klasörü herhangi bir statik sunucuyla aç:
 
-> GitHub Pages / Vercel / Netlify gibi salt statik platformlar **uygun
-> değildir** — kalıcı WebSocket sunucusu gerekir. İstenirse `process.env.PORT`
-> + `npm start` ile herhangi bir kalıcı Node host'a da yüklenebilir.
+```bash
+npx http-server -p 8080 -c-1
+```
+
+Sonra `http://localhost:8080`. İki sekme açıp biri kurar, biri katılır.
+(`file://` ile doğrudan açmak da çoğu tarayıcıda çalışır.)
 
 ## Mimari (kısa)
 
-- `server.js` — Express + Socket.IO. Yalnızca **eşleştirme + mesaj rölesi**.
+- Sunucu yok. **PeerJS**'in ücretsiz genel sunucusu yalnızca eşleştirme
+  (signaling) yapar. Oda kimliği şifrenin özetidir; şifrenin kendisi
+  gönderilmez. Doğrudan yol kurulamazsa PeerJS'in TURN rölesi devreye girer.
 - Fizik **host-authoritative**: oyunu kuran istemci simülasyonu çalıştırır,
   durumu misafire **~60 Hz** yollar; misafir kendi paddle'ını anında oynatır,
   puck'ı hızıyla ekstrapole edip (dead-reckoning) yumuşatarak çizer.
 - Çarpışma **süpürmeli (swept)** — hızlı vuruşta paddle topun içinden geçmez.
-- `public/js/game.js` çekirdek (fizik + çizim + rol ayrımı).
+- `js/game.js` çekirdek (fizik + çizim + rol ayrımı).
 
 ## Proje yapısı
 
 ```
-server.js              Express + Socket.IO röle/eşleştirme
-public/index.html      Ekranlar (lobi/bekleme/oyun/bitiş)
-public/css/style.css   Mobil öncelikli stiller
-public/js/net.js       Socket.IO istemci sarmalayıcı
-public/js/sfx.js       Web Audio ses efektleri (dosyasız)
-public/js/game.js      Fizik + çizim + ağ senkronu
-public/js/ui.js        Ekran geçişleri / DOM yardımcıları
-public/js/main.js      Akış kontrolü ve olay bağlama
+index.html      Ekranlar (lobi/bekleme/oyun/bitiş)
+css/style.css   Mobil öncelikli stiller
+js/net.js       WebRTC (PeerJS) bağlantı katmanı
+js/sfx.js       Web Audio ses efektleri (dosyasız)
+js/game.js      Fizik + çizim + ağ senkronu
+js/ui.js        Ekran geçişleri / DOM yardımcıları
+js/main.js      Akış kontrolü ve olay bağlama
 ```

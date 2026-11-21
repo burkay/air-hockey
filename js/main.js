@@ -86,7 +86,11 @@
     else if (a === 'show-join') UI.lobbyMode('join');
     else if (a === 'back') UI.lobbyMode('home');
     else if (a === 'cancel-wait') { Net.leave(); UI.show('lobby'); UI.lobbyMode('home'); }
-    else if (a === 'to-lobby') { if (!session.ai) Net.leave(); location.reload(); }
+    else if (a === 'to-lobby') {
+      if (session.ai) { location.reload(); return; }
+      Net.leave();                                   // 'bye' rakibe ulassin
+      setTimeout(() => location.reload(), 200);
+    }
     else if (a === 'rematch') {
       if (session.ai) {
         restartGame();
@@ -160,10 +164,8 @@
   Net.on('peer_dropped', () => {
     if (!session.ai) UI.netMsg('Rakip baglantisi koptu, bekleniyor...');
   });
-  // Rakip geri geldi.
+  // Rakip geri geldi (yeniden baglanmayi net.js kendisi yapar).
   Net.on('peer_back', () => UI.netMsg(''));
-  // Kendi yeniden baglanmamiz onaylandi.
-  Net.on('resumed', () => UI.netMsg(''));
 
   Net.on('peer_left', (d) => {
     UI.netMsg('');
@@ -190,19 +192,6 @@
     if (session.role !== 'host') return;
     restartGame();
     Net.rematch();
-  });
-
-  // Baglanti durumu + otomatik yeniden katilma
-  Net.socket.on('disconnect', () => {
-    if (!session.ai && session.role) {
-      UI.netMsg('Baglanti koptu, yeniden baglaniliyor...');
-    }
-  });
-  Net.socket.on('connect', () => {
-    // Oturum varsa bu bir YENIDEN baglanma -> eski yeri geri al.
-    if (!session.ai && session.role && session.password) {
-      Net.resume(session.password, session.role);
-    }
   });
 
   // Baslangic: kayitli skin + puck tercihini uygula + lobi

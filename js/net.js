@@ -1,0 +1,259 @@
+// Ag katmani: WebRTC ile dogrudan (peer-to-peer) baglanti, PeerJS uzerinden.
+// Kendi sunucumuz yok: PeerJS'in ucretsiz genel sunucusu yalnizca eslestirme
+// (signaling) yapar; oyun verisi iki cihaz arasinda dogrudan akar. Dogrudan
+// yol kurulamazsa PeerJS'in varsayilan TURN rolesi (AB/ABD) devreye girer.
+//
+// Disariya verilen olaylar eski Socket.IO surumuyle ayni:
+// room_created, joined, peer_joined, error_msg, peer_dropped, peer_back,
+// peer_left, state, input, rematch, rematch_request.
+
+const Net = (() => {
+  const APP = 'bk-airhockey-v2-';
+  const GRACE_MS = 25000;   // kopmada rakibi bu kadar bekle
+  const SILENT_MS = 4000;   // bu kadar veri gelmezse baglanti koptu say
+  const PING_MS = 500;      // bosta kalinca canli-tut mesaji
+  const JOIN_MS = 15000;    // ilk katilma zaman asimi
+  const RETRY_MS = 2000;    // misafir yeniden arama araligi
+
+  const handlers = {};
+  function emit(ev, d) { (handlers[ev] || []).forEach((fn) => fn(d)); }
+
+  // Sifre -> PeerJS kimligi (sifrenin kendisi sunucuya gitmez, ozeti gider)
+  function roomId(pw) {
+    const s = String(pw).trim();
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 2654435761);
+      h2 = Math.imul(h2 ^ c, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return APP + (h1 >>> 0).toString(16) + (h2 >>> 0).toString(16);
+  }
+
+  let peer = null;        // kendi PeerJS nesnemiz
+  let conn = null;        // rakiple acik veri kanali
+  let role = null;        // 'host' | 'guest'
+  let hostId = null;      // misafir: aranacak kimlik
+  let look = null;        // host: { rules, skin, puck }
+  let token = null;       // misafir: kendi kimligi (yeniden baglanmada ayni kisi mi?)
+  let guestToken = null;  // host: su anki misafirin kimligi
+  let opened = false;     // host: oda acildi / misafir: maca katildi
+  let lastRx = 0, lastTx = 0;
+  let graceT = null, retryT = null, joinT = null, hb = null;
+
+  function stop(t) { if (t) clearTimeout(t); return null; }
+  function clearTimers() { graceT = stop(graceT); retryT = stop(retryT); joinT = stop(joinT); }
+
+  function closeConn() {
+    const c = conn;
+    conn = null;            // once null: close olayi dropConn'u tetiklemesin
+    if (c) { try { c.close(); } catch (e) {} }
+  }
+
+  function send(msg) {
+    if (!conn || !conn.open) return;
+    try { conn.send(msg); lastTx = performance.now(); } catch (e) {}
+  }
+
+  // Canli-tut + sessizlik algilama (WebRTC 'close' olayi gec gelebilir)
+  function startHeartbeat() {
+    if (hb) return;
+    hb = setInterval(() => {
+      if (!conn || !conn.open) return;
+      const now = performance.now();
+      if (now - lastTx > PING_MS) send({ t: 'ping' });
+      if (now - lastRx > SILENT_MS) dropConn();
+    }, 250);
+  }
+
+  function makePeer(id) {
+    const p = id ? new Peer(id, { debug: 0 }) : new Peer({ debug: 0 });
+    // Eslestirme sunucusu baglantisi koparsa (iOS arka plan vb.) ayni kimlikle geri don.
+    // Acik veri kanali bundan etkilenmez.
+    p.on('disconnected', () => {
+      setTimeout(() => { if (peer === p && !p.destroyed && p.disconnected) p.reconnect(); }, 1000);
+    });
+    return p;
+  }
+
+  function onData(c, m) {
+    if (c !== conn || !m) return;
+    lastRx = performance.now();
+    switch (m.t) {
+      case 's': emit('state', m.d); break;
+      case 'i': emit('input', m.d); break;
+      case 'rm': emit('rematch'); break;
+      case 'rq': emit('rematch_request'); break;
+      case 'bye': leftNow(); break;
+      case 'full': fail('room_full', 'Bu oyun dolu.'); break;
+      case 'hello':
+        joinT = stop(joinT); graceT = stop(graceT); retryT = stop(retryT);
+        if (opened) emit('peer_back');
+        else { opened = true; emit('joined', { rules: m.rules, skin: m.skin, puck: m.puck }); }
+        break;
+    }
+  }
+
+  // Rakip bilerek cikti
+  function leftNow() {
+    if (role === 'host') {
+      closeConn();
+      guestToken = null;
+      graceT = stop(graceT);
+      emit('peer_left', { who: 'guest' });
+    } else {
+      teardown();
+      emit('peer_left', { who: 'host' });
+    }
+  }
+
+  // Baglanti koptu (gecici olabilir): grace boyunca bekle / yeniden dene
+  function dropConn() {
+    if (!conn) return;
+    closeConn();
+    if (role === 'host') {
+      emit('peer_dropped', { who: 'guest' });
+      stop(graceT);
+      graceT = setTimeout(() => {
+        graceT = null; guestToken = null;
+        emit('peer_left', { who: 'guest' });
+      }, GRACE_MS);
+    } else if (!opened) {
+      fail('p2p_fail', 'Rakibe baglanilamadi. Ikinizden biri Wi-Fi / mobil veri degistirip tekrar denesin.');
+    } else {
+      emit('peer_dropped', { who: 'host' });
+      stop(graceT);
+      graceT = setTimeout(() => { teardown(); emit('peer_left', { who: 'host' }); }, GRACE_MS);
+      retry();
+    }
+  }
+
+  // --- Misafir ---
+  function dial() {
+    if (!peer || peer.destroyed) return;
+    if (peer.disconnected) { peer.reconnect(); return; }   // 'open' gelince tekrar arar
+    closeConn();
+    const c = peer.connect(hostId, { reliable: true, serialization: 'json', metadata: { token } });
+    conn = c;
+    c.on('open', () => {
+      if (c !== conn) return;
+      lastRx = performance.now();
+      startHeartbeat();
+    });
+    c.on('data', (m) => onData(c, m));
+    c.on('close', () => { if (c === conn) dropConn(); });
+    c.on('error', () => {});
+  }
+  function retry() {
+    retryT = stop(retryT);
+    retryT = setTimeout(() => {
+      retryT = null;
+      if (!graceT || (conn && conn.open)) return;
+      dial();
+      retry();
+    }, RETRY_MS);
+  }
+
+  // --- Host ---
+  function onConnection(c) {
+    const t = c.metadata && c.metadata.token;
+    const same = !!t && t === guestToken;     // ayni misafir geri dondu
+    c.on('open', () => {
+      const busy = !same && ((conn && conn.open) || graceT);
+      if (busy) {
+        try { c.send({ t: 'full' }); } catch (e) {}
+        setTimeout(() => { try { c.close(); } catch (e) {} }, 300);
+        return;
+      }
+      closeConn();
+      conn = c;
+      graceT = stop(graceT);
+      guestToken = t;
+      lastRx = performance.now();
+      startHeartbeat();
+      send({ t: 'hello', rules: look.rules, skin: look.skin, puck: look.puck });
+      emit(same ? 'peer_back' : 'peer_joined');
+    });
+    c.on('data', (m) => onData(c, m));
+    c.on('close', () => { if (c === conn) dropConn(); });
+    c.on('error', () => {});
+  }
+
+  function teardown() {
+    clearTimers();
+    clearInterval(hb); hb = null;
+    closeConn();
+    const p = peer;
+    peer = null;
+    if (p) { try { p.destroy(); } catch (e) {} }
+    role = hostId = look = guestToken = null;
+    opened = false;
+  }
+
+  function fail(code, message) {
+    teardown();
+    emit('error_msg', { code, message });
+  }
+
+  function noLib() {
+    if (typeof Peer !== 'undefined') return false;
+    emit('error_msg', { code: 'no_lib', message: 'Baglanti kutuphanesi yuklenemedi. Interneti kontrol edip sayfayi yenile.' });
+    return true;
+  }
+
+  return {
+    on(ev, fn) { (handlers[ev] = handlers[ev] || []).push(fn); },
+
+    createRoom(password, rules, skin, puck) {
+      if (noLib()) return;
+      teardown();
+      role = 'host';
+      look = { rules, skin, puck };
+      const p = makePeer(roomId(password));
+      peer = p;
+      p.on('open', () => {
+        if (peer !== p || opened) return;   // sunucuya yeniden baglanmada tekrar yollama
+        opened = true;
+        emit('room_created', { password, rules, skin, puck });
+      });
+      p.on('connection', onConnection);
+      p.on('error', (err) => {
+        if (peer !== p) return;
+        if (err.type === 'unavailable-id') fail('password_taken', 'Bu sifre kullanimda, baska bir sifre sec.');
+        else if (!opened) fail('net', 'Eslestirme sunucusuna ulasilamadi. Tekrar dene.');
+      });
+    },
+
+    joinRoom(password) {
+      if (noLib()) return;
+      teardown();
+      role = 'guest';
+      hostId = roomId(password);
+      token = Math.random().toString(36).slice(2);
+      const p = makePeer(null);
+      peer = p;
+      p.on('open', () => { if (peer === p && !(conn && conn.open)) dial(); });
+      p.on('error', (err) => {
+        if (peer !== p || opened) return;   // macta yeniden denemede gecici hatalar normal
+        if (err.type === 'peer-unavailable') fail('no_room', 'Bu sifreyle acik bir oyun yok.');
+        else fail('net', 'Eslestirme sunucusuna ulasilamadi. Tekrar dene.');
+      });
+      joinT = setTimeout(() => {
+        joinT = null;
+        if (!opened) fail('p2p_fail', 'Rakibe baglanilamadi. Ikinizden biri Wi-Fi / mobil veri degistirip tekrar denesin.');
+      }, JOIN_MS);
+    },
+
+    sendState(d) { send({ t: 's', d }); },
+    sendInput(d) { send({ t: 'i', d }); },
+    rematch() { send({ t: 'rm' }); },
+    rematchRequest() { send({ t: 'rq' }); },
+    leave() {
+      send({ t: 'bye' });
+      const p = peer;
+      setTimeout(() => { if (peer === p) teardown(); }, 100);   // 'bye' gitsin diye kisa bekle
+    }
+  };
+})();
