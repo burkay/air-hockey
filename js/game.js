@@ -670,7 +670,7 @@ const Game = (() => {
         const left = Math.max(0, Math.ceil(countdown));
         msg = left > 0 ? String(left) : '';
       } else {
-        msg = 'Hazir ol...';
+        msg = 'Hazır ol...';
       }
     }
     cb.onMessage && cb.onMessage(msg, isGoal);

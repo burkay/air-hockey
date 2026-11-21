@@ -14,13 +14,13 @@ const Net = (() => {
   const PING_MS = 500;      // bosta kalinca canli-tut mesaji
   const JOIN_MS = 15000;    // ilk katilma zaman asimi
   const RETRY_MS = 2000;    // misafir yeniden arama araligi
-
   const handlers = {};
   function emit(ev, d) { (handlers[ev] || []).forEach((fn) => fn(d)); }
 
-  // Sifre -> PeerJS kimligi (sifrenin kendisi sunucuya gitmez, ozeti gider)
+  // Sifre -> PeerJS kimligi (sifrenin kendisi sunucuya gitmez, ozeti gider).
+  // Buyuk/kucuk harf ve bosluk farki onemsiz: iOS klavyesi ilk harfi buyutebilir.
   function roomId(pw) {
-    const s = String(pw).trim();
+    const s = String(pw).trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr');
     let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
     for (let i = 0; i < s.length; i++) {
       const c = s.charCodeAt(i);
@@ -72,11 +72,20 @@ const Net = (() => {
     const p = id ? new Peer(id, { debug: 0 }) : new Peer({ debug: 0 });
     // Eslestirme sunucusu baglantisi koparsa (iOS arka plan vb.) ayni kimlikle geri don.
     // Acik veri kanali bundan etkilenmez.
-    p.on('disconnected', () => {
-      setTimeout(() => { if (peer === p && !p.destroyed && p.disconnected) p.reconnect(); }, 1000);
-    });
+    p.on('disconnected', () => setTimeout(() => { if (peer === p) wake(); }, 1000));
     return p;
   }
+
+  // Sunucuya yeniden baglan (gerekiyorsa). reconnect() yanlis durumda hata atar.
+  function wake() {
+    const p = peer;
+    if (!p || p.destroyed || !p.disconnected) return;
+    try { p.reconnect(); } catch (e) {}
+  }
+  // Uygulamaya geri donuldu (or. WhatsApp'tan): beklemeden yeniden baglan.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') wake();
+  });
 
   function onData(c, m) {
     if (c !== conn || !m) return;
@@ -121,7 +130,7 @@ const Net = (() => {
         emit('peer_left', { who: 'guest' });
       }, GRACE_MS);
     } else if (!opened) {
-      fail('p2p_fail', 'Rakibe baglanilamadi. Ikinizden biri Wi-Fi / mobil veri degistirip tekrar denesin.');
+      fail('p2p_fail', 'Rakibe bağlanılamadı. Biriniz Wi-Fi ile mobil veri arasında geçiş yapıp tekrar denesin.');
     } else {
       emit('peer_dropped', { who: 'host' });
       stop(graceT);
@@ -199,7 +208,7 @@ const Net = (() => {
 
   function noLib() {
     if (typeof Peer !== 'undefined') return false;
-    emit('error_msg', { code: 'no_lib', message: 'Baglanti kutuphanesi yuklenemedi. Interneti kontrol edip sayfayi yenile.' });
+    emit('error_msg', { code: 'no_lib', message: 'Bağlantı kütüphanesi yüklenemedi. İnterneti kontrol edip sayfayı yenile.' });
     return true;
   }
 
@@ -221,8 +230,8 @@ const Net = (() => {
       p.on('connection', onConnection);
       p.on('error', (err) => {
         if (peer !== p) return;
-        if (err.type === 'unavailable-id') fail('password_taken', 'Bu sifre kullanimda, baska bir sifre sec.');
-        else if (!opened) fail('net', 'Eslestirme sunucusuna ulasilamadi. Tekrar dene.');
+        if (err.type === 'unavailable-id') fail('password_taken', 'Bu şifre kullanımda, başka bir şifre seç.');
+        else if (!opened) fail('net', 'Eşleştirme sunucusuna ulaşılamadı. Tekrar dene.');
       });
     },
 
@@ -235,14 +244,17 @@ const Net = (() => {
       const p = makePeer(null);
       peer = p;
       p.on('open', () => { if (peer === p && !(conn && conn.open)) dial(); });
+      // Not: PeerJS sunucusu henuz bagli olmayan kimlige giden teklifi birkac
+      // saniye bekletir; host o an baska uygulamadaysa ve doner donmez
+      // yeniden baglanirsa (visibilitychange -> wake) katilma yine olur.
       p.on('error', (err) => {
         if (peer !== p || opened) return;   // macta yeniden denemede gecici hatalar normal
-        if (err.type === 'peer-unavailable') fail('no_room', 'Bu sifreyle acik bir oyun yok.');
-        else fail('net', 'Eslestirme sunucusuna ulasilamadi. Tekrar dene.');
+        if (err.type === 'peer-unavailable') fail('no_room', 'Bu şifreyle açık bir oyun yok.');
+        else fail('net', 'Eşleştirme sunucusuna ulaşılamadı. Tekrar dene.');
       });
       joinT = setTimeout(() => {
         joinT = null;
-        if (!opened) fail('p2p_fail', 'Rakibe baglanilamadi. Ikinizden biri Wi-Fi / mobil veri degistirip tekrar denesin.');
+        if (!opened) fail('p2p_fail', 'Rakibe bağlanılamadı. Biriniz Wi-Fi ile mobil veri arasında geçiş yapıp tekrar denesin.');
       }, JOIN_MS);
     },
 

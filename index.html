@@ -5,10 +5,15 @@
   <meta name="viewport"
         content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Air Hockey" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#0b1d2a" />
+  <meta name="format-detection" content="telephone=no" />
   <title>Air Hockey</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%226%22 fill=%22%2300e5ff%22/%3E%3C/svg%3E" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -16,63 +21,65 @@
   <section id="screen-lobby" class="screen active">
     <div class="panel">
       <h1>Air Hockey</h1>
-      <p class="subtitle">Arkadasinla uzaktan oyna</p>
+      <p class="subtitle">Arkadaşınla uzaktan oyna</p>
 
       <div id="lobby-home">
-        <button class="btn primary" data-action="show-ai">Bilgisayara Karsi</button>
-        <button class="btn" data-action="show-create">Arkadasinla: Oyun Kur</button>
-        <button class="btn" data-action="show-join">Arkadasinla: Katil</button>
+        <button class="btn primary" data-action="show-ai">Bilgisayara Karşı</button>
+        <button class="btn" data-action="show-create">Arkadaşınla: Oyun Kur</button>
+        <button class="btn" data-action="show-join">Arkadaşınla: Katıl</button>
         <div class="skin-row">
-          <span class="skin-label">Gorunum</span>
+          <span class="skin-label">Görünüm</span>
           <button type="button" class="skin-btn" data-skin="neon">Neon</button>
           <button type="button" class="skin-btn" data-skin="arcade">Arcade</button>
         </div>
         <div class="skin-row">
           <span class="skin-label">Puck</span>
-          <button type="button" class="skin-btn" data-puck="small">Kucuk</button>
+          <button type="button" class="skin-btn" data-puck="small">Küçük</button>
           <button type="button" class="skin-btn" data-puck="med">Orta</button>
-          <button type="button" class="skin-btn" data-puck="large">Buyuk</button>
+          <button type="button" class="skin-btn" data-puck="large">Büyük</button>
         </div>
       </div>
 
       <form id="form-ai" class="lobby-form hidden">
-        <fieldset class="rules">
-          <legend>Mac kurali</legend>
-          <label class="radio"><input type="radio" name="ai-rules" value="first7" checked /> Ilk 7 sayi kazanir</label>
-          <label class="radio"><input type="radio" name="ai-rules" value="first11" /> Ilk 11 sayi kazanir</label>
-          <label class="radio"><input type="radio" name="ai-rules" value="timed" /> Sureli (2 dakika)</label>
+        <fieldset class="seg">
+          <legend>Maç kuralı</legend>
+          <label><input type="radio" name="ai-rules" value="first7" checked /><span>İlk 7</span></label>
+          <label><input type="radio" name="ai-rules" value="first11" /><span>İlk 11</span></label>
+          <label><input type="radio" name="ai-rules" value="timed" /><span>2 dakika</span></label>
         </fieldset>
-        <fieldset class="rules">
+        <fieldset class="seg">
           <legend>Zorluk</legend>
-          <label class="radio"><input type="radio" name="ai-diff" value="easy" /> Kolay</label>
-          <label class="radio"><input type="radio" name="ai-diff" value="normal" checked /> Orta</label>
-          <label class="radio"><input type="radio" name="ai-diff" value="hard" /> Zor</label>
+          <label><input type="radio" name="ai-diff" value="easy" /><span>Kolay</span></label>
+          <label><input type="radio" name="ai-diff" value="normal" checked /><span>Orta</span></label>
+          <label><input type="radio" name="ai-diff" value="hard" /><span>Zor</span></label>
         </fieldset>
-        <button type="submit" class="btn primary">Basla</button>
+        <button type="submit" class="btn primary">Başla</button>
         <button type="button" class="btn ghost" data-action="back">Geri</button>
       </form>
 
       <form id="form-create" class="lobby-form hidden">
-        <label>Sifre belirle
-          <input type="text" id="create-password" autocomplete="off"
-                 inputmode="text" placeholder="orn: hokey42" />
+        <label>Şifre belirle
+          <input type="text" id="create-password" autocomplete="off" autocapitalize="off"
+                 autocorrect="off" spellcheck="false" enterkeyhint="go"
+                 maxlength="40" placeholder="örn: hokey42" />
         </label>
-        <fieldset class="rules">
-          <legend>Mac kurali</legend>
-          <label class="radio"><input type="radio" name="rules" value="first7" checked /> Ilk 7 sayi kazanir</label>
-          <label class="radio"><input type="radio" name="rules" value="first11" /> Ilk 11 sayi kazanir</label>
-          <label class="radio"><input type="radio" name="rules" value="timed" /> Sureli (2 dakika)</label>
+        <fieldset class="seg">
+          <legend>Maç kuralı</legend>
+          <label><input type="radio" name="rules" value="first7" checked /><span>İlk 7</span></label>
+          <label><input type="radio" name="rules" value="first11" /><span>İlk 11</span></label>
+          <label><input type="radio" name="rules" value="timed" /><span>2 dakika</span></label>
         </fieldset>
         <button type="submit" class="btn primary">Kur</button>
         <button type="button" class="btn ghost" data-action="back">Geri</button>
       </form>
 
       <form id="form-join" class="lobby-form hidden">
-        <label>Arkadasinin sifresi
-          <input type="text" id="join-password" autocomplete="off"
-                 inputmode="text" placeholder="sifreyi gir" />
+        <label>Arkadaşının şifresi
+          <input type="text" id="join-password" autocomplete="off" autocapitalize="off"
+                 autocorrect="off" spellcheck="false" enterkeyhint="go"
+                 maxlength="40" placeholder="şifreyi gir" />
         </label>
-        <button type="submit" class="btn primary">Katil</button>
+        <button type="submit" class="btn primary">Katıl</button>
         <button type="button" class="btn ghost" data-action="back">Geri</button>
       </form>
 
@@ -83,11 +90,12 @@
   <!-- BEKLEME -->
   <section id="screen-wait" class="screen">
     <div class="panel">
-      <h2>Arkadasin bekleniyor...</h2>
-      <p>Su sifreyi arkadasina ver:</p>
+      <h2>Arkadaşın bekleniyor...</h2>
+      <p class="subtitle">Şifre:</p>
       <div id="wait-password" class="code"></div>
-      <p class="subtitle">O "Oyuna Katil" deyip bu sifreyi girince oyun baslar.</p>
-      <button class="btn ghost" data-action="cancel-wait">Iptal</button>
+      <button class="btn primary" data-action="share">Davet linkini paylaş</button>
+      <p id="share-note" class="subtitle">Arkadaşın linki açınca ya da "Katıl"a basıp bu şifreyi girince oyun başlar.</p>
+      <button class="btn ghost" data-action="cancel-wait">İptal</button>
     </div>
   </section>
 
@@ -105,15 +113,19 @@
     <div id="center-msg" class="center-msg"></div>
     <div id="netmsg" class="netmsg"></div>
     <button id="mute-btn" class="mute-btn" aria-label="Ses">🔊</button>
+    <div class="rotate" aria-hidden="true">
+      <div class="rotate-icon">📱</div>
+      <p>Telefonu dik tut</p>
+    </div>
   </section>
 
   <!-- BITIS -->
   <section id="screen-end" class="screen">
     <div class="panel">
-      <h2 id="end-title">Mac bitti</h2>
+      <h2 id="end-title">Maç bitti</h2>
       <div id="end-score" class="code"></div>
       <button class="btn primary" data-action="rematch">Yeniden Oyna</button>
-      <button class="btn ghost" data-action="to-lobby">Lobiye Don</button>
+      <button class="btn ghost" data-action="to-lobby">Lobiye Dön</button>
       <p id="end-note" class="subtitle"></p>
     </div>
   </section>

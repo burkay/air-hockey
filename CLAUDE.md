@@ -114,6 +114,25 @@ iPhone tarayıcısından air hockey. İki mod:
   (aynı kimlik, açık kanal etkilenmez). Bilerek çıkış (`bye`) anında
   `peer_left`. Durum bildirimi ayrı `#netmsg` (game render dokunmaz).
 
+## Mobil
+- Ekranlar `.screen` kaydırılabilir; `.panel{margin:auto}` sığarsa ortalar,
+  sığmazsa üstten başlar (align-items:center kullanma: taşan üst kısım kesilir).
+- CSS sonunda telefon blokları: `max-height:700px` (kısa ekran / Safari çubukları),
+  `max-width:600px`, `orientation:landscape and max-height:520px` (oyunda
+  `.rotate` "Telefonu dik tut" katmanı; masa dikey olduğu için).
+- Seçimler `.seg` (gizli radio + span düğme); `name`/`value`'lar main.js'te okunur.
+- Şifre: `autocapitalize/autocorrect=off`; `roomId` küçük harf + boşluk
+  normalize eder (iOS ilk harfi büyütüyordu → oda bulunamıyordu).
+- Davet linki `#oda=<şifre>`: bekleme ekranında `navigator.share` (yoksa
+  panoya kopyala); açılışta hash okunur, temizlenir, otomatik katılır.
+- `UI.onShow` kancası: wait/game/end(çok oyuncu) ekranında Wake Lock
+  (ekran kararmasın) + `history.pushState` (iOS kenardan geri kaydırma
+  sayfayı terk etmesin). Lobiye dönünce Kur/Katıl düğmeleri yeniden aktif.
+- `net.js` `visibilitychange` → sunucuya hemen yeniden bağlan (`wake()`).
+- Ana ekran: `manifest.webmanifest`, `icon-180.png` (apple-touch-icon),
+  `icon-512.png`. Arayüz metinleri Türkçe karakterli; kod yorumları ASCII.
+- Ekran boyutu kontrolü: 375×553 (SE + Safari), 390×664, 430×739, 844×330 yatay.
+
 ## Konvansiyonlar / dikkat
 - Sanal masa koordinatı `W=100 x H=200` (dikey). Pixel'e letterbox ile ölçeklenir.
 - Misafir görünümü 180° döndürülür (`toView`/`fromView`); ikisi de alt kaleyi savunur.

@@ -99,9 +99,68 @@
         Net.rematch();
       } else {
         Net.rematchRequest();
-        UI.$('end-note').textContent = 'Rakipten yeni mac onayi bekleniyor...';
+        UI.$('end-note').textContent = 'Rakipten yeni maç onayı bekleniyor...';
       }
     }
+    else if (a === 'share') shareInvite();
+  });
+
+  // --- Davet linki: #oda=<sifre> (acan kisi otomatik katilir) ---
+  function inviteUrl(pw) {
+    return location.href.split('#')[0] + '#oda=' + encodeURIComponent(pw);
+  }
+  async function shareInvite() {
+    const url = inviteUrl(session.password);
+    const text = 'Air Hockey oynayalım! Şifre: ' + session.password;
+    const note = UI.$('share-note');
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Air Hockey', text, url }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    try {
+      await navigator.clipboard.writeText(text + '\n' + url);
+      note.textContent = 'Link kopyalandı, arkadaşına gönder.';
+    } catch (e) {
+      note.textContent = url;
+    }
+  }
+
+  // --- Baglanirken cift dokunmayi engelle + durum goster ---
+  function setBusy(on) {
+    document.querySelectorAll('#form-create [type=submit], #form-join [type=submit]')
+      .forEach((b) => { b.disabled = on; });
+    if (on) UI.lobbyInfo('Bağlanıyor...');
+  }
+
+  // --- Ekran degisince: ekran kararmasin + geri kaydirma maci bozmasin ---
+  let wakeLock = null;
+  async function keepAwake(on) {
+    try {
+      if (on && !wakeLock && navigator.wakeLock) {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      } else if (!on && wakeLock) {
+        const w = wakeLock; wakeLock = null; await w.release();
+      }
+    } catch (e) { wakeLock = null; }
+  }
+  const live = (n) => n === 'wait' || n === 'game' || (n === 'end' && !session.ai);
+  UI.onShow((name) => {
+    if (name === 'lobby') setBusy(false);
+    if (name === 'wait') UI.$('share-note').textContent =
+      'Arkadaşın linki açınca ya da "Katıl"a basıp bu şifreyi girince oyun başlar.';
+    keepAwake(live(name));
+    // iOS kenardan geri kaydirma sayfadan cikarmasin: fazladan gecmis kaydi
+    if (live(name) && !(history.state && history.state.ah)) {
+      try { history.pushState({ ah: 1 }, ''); } catch (e) {}
+    }
+  });
+  window.addEventListener('popstate', () => {
+    if (live(UI.screen())) { try { history.pushState({ ah: 1 }, ''); } catch (e) {} }
+  });
+  document.addEventListener('visibilitychange', () => {
+    // Wake lock arka plana gecince birakilir; donunce yeniden al
+    if (document.visibilityState === 'visible') keepAwake(live(UI.screen()));
   });
 
   UI.$('form-ai').addEventListener('submit', (ev) => {
@@ -118,19 +177,23 @@
   UI.$('form-create').addEventListener('submit', (ev) => {
     ev.preventDefault();
     const pw = UI.$('create-password').value.trim();
-    if (!pw) { UI.lobbyError('Lutfen bir sifre gir.'); return; }
+    if (!pw) { UI.lobbyError('Lütfen bir şifre gir.'); return; }
     session.ai = false;
     session.password = pw;
     session.rules = selectedRules();
+    document.activeElement && document.activeElement.blur();   // klavyeyi kapat
+    setBusy(true);
     Net.createRoom(pw, session.rules, session.skin, session.puck);
   });
 
   UI.$('form-join').addEventListener('submit', (ev) => {
     ev.preventDefault();
     const pw = UI.$('join-password').value.trim();
-    if (!pw) { UI.lobbyError('Lutfen sifreyi gir.'); return; }
+    if (!pw) { UI.lobbyError('Lütfen şifreyi gir.'); return; }
     session.ai = false;
     session.password = pw;
+    document.activeElement && document.activeElement.blur();   // klavyeyi kapat
+    setBusy(true);
     Net.joinRoom(pw);
   });
 
@@ -157,12 +220,12 @@
 
   Net.on('error_msg', (d) => {
     UI.show('lobby');
-    UI.lobbyError(d && d.message ? d.message : 'Bir hata olustu.');
+    UI.lobbyError(d && d.message ? d.message : 'Bir hata oluştu.');
   });
 
   // Rakip GECICI koptu (grace icinde): oyun durmaz, sadece bilgi ver.
   Net.on('peer_dropped', () => {
-    if (!session.ai) UI.netMsg('Rakip baglantisi koptu, bekleniyor...');
+    if (!session.ai) UI.netMsg('Rakibin bağlantısı koptu, bekleniyor...');
   });
   // Rakip geri geldi (yeniden baglanmayi net.js kendisi yapar).
   Net.on('peer_back', () => UI.netMsg(''));
@@ -178,7 +241,7 @@
       // Host ayrildi (misafir tarafi)
       UI.show('lobby');
       UI.lobbyMode('home');
-      UI.lobbyError('Rakip baglantiyi kapatti.');
+      UI.lobbyError('Rakip oyundan çıktı.');
     }
   });
 
@@ -203,4 +266,17 @@
   applyPuck(savedPuck);
   UI.show('lobby');
   UI.lobbyMode('home');
+
+  // Davet linkiyle acildiysa (#oda=...) dogrudan katil
+  const inv = location.hash.match(/^#oda=(.+)$/);
+  if (inv) {
+    let pw = '';
+    try { pw = decodeURIComponent(inv[1]).trim(); } catch (e) {}
+    try { history.replaceState(null, '', location.href.split('#')[0]); } catch (e) {}
+    if (pw) {
+      UI.lobbyMode('join');
+      UI.$('join-password').value = pw;
+      UI.$('form-join').requestSubmit();
+    }
+  }
 })();

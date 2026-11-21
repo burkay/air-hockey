@@ -3,20 +3,34 @@
 const UI = (() => {
   const $ = (id) => document.getElementById(id);
 
+  let current = 'lobby';
+  const showHooks = [];
   function show(name) {
     document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
     $('screen-' + name).classList.add('active');
+    current = name;
+    showHooks.forEach((fn) => fn(name));
   }
+  function onShow(fn) { showHooks.push(fn); }
+  function screen() { return current; }
 
   function lobbyMode(which) {
     $('lobby-home').classList.toggle('hidden', which !== 'home');
     $('form-create').classList.toggle('hidden', which !== 'create');
     $('form-join').classList.toggle('hidden', which !== 'join');
     $('form-ai').classList.toggle('hidden', which !== 'ai');
-    $('lobby-error').textContent = '';
+    lobbyError('');
   }
 
-  function lobbyError(msg) { $('lobby-error').textContent = msg || ''; }
+  function lobbyError(msg) {
+    $('lobby-error').textContent = msg || '';
+    $('lobby-error').classList.remove('info');
+  }
+  // Notr durum mesaji (or. "Baglaniyor...")
+  function lobbyInfo(msg) {
+    $('lobby-error').textContent = msg || '';
+    $('lobby-error').classList.add('info');
+  }
 
   function waitPassword(pw) { $('wait-password').textContent = pw; }
 
@@ -50,7 +64,7 @@ const UI = (() => {
   }
 
   function endScreen(result, scoreLine, note) {
-    const title = result === 'win' ? 'Kazandin! 🎉'
+    const title = result === 'win' ? 'Kazandın! 🎉'
                 : result === 'lose' ? 'Kaybettin'
                 : 'Berabere';
     $('end-title').textContent = title;
@@ -77,5 +91,5 @@ const UI = (() => {
     el.classList.toggle('show', !!txt);
   }
 
-  return { $, show, lobbyMode, lobbyError, waitPassword, hud, resetScores, message, endScreen, markSkin, markPuck, netMsg };
+  return { $, show, onShow, screen, lobbyMode, lobbyError, lobbyInfo, waitPassword, hud, resetScores, message, endScreen, markSkin, markPuck, netMsg };
 })();
