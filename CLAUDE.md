@@ -16,6 +16,9 @@ iPhone tarayıcısından air hockey. İki mod:
 - Yerel: `npx http-server -p 8080 -c-1` → http://localhost:8080 (iki sekme).
 - Yayın: `main`'e push → https://burkay.github.io/air-hockey/
 - Mutlak yol (`/js/...`) KULLANMA: Pages alt dizinden (`/air-hockey/`) sunar.
+- **CSS/JS değişince `index.html`'deki `?v=N`'i hepsinde birlikte artır.** Pages
+  `max-age=600` gönderir; telefon yeni HTML + eski JS ile kalıp yeni düğmeleri
+  "ölü" gösteriyordu (Kontrol seçimi tıklanmıyordu).
 
 ## Dizin yapısı
 - `js/game.js` — fizik + çizim + host/misafir rol ayrımı (çekirdek)
