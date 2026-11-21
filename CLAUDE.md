@@ -123,6 +123,18 @@ iPhone tarayıcısından air hockey. İki mod:
 - Seçimler `.seg` (gizli radio + span düğme); `name`/`value`'lar main.js'te okunur.
 - Şifre: `autocapitalize/autocorrect=off`; `roomId` küçük harf + boşluk
   normalize eder (iOS ilk harfi büyütüyordu → oda bulunamıyordu).
+  i/ı/İ/I hepsi `i`'ye katlanır. `toLocaleLowerCase('tr')` KULLANMA:
+  'I'→'ı' yapar, aynı şifre farklı odaya gider.
+- **Kontrol modu** (`Game.setControl`, lobide `[data-ctrl]`,
+  `localStorage('ah_ctrl')`, ağa gitmez):
+  - `offset` (varsayılan): paddle parmağın `OFFSET_PX` (64 CSS px) üstünde;
+    kendi kale çizgisinden `H*OFFSET_TAPER` içinde ofset doğrusal 0'a iner
+    (kale ağzına inebilsin). Görünüm koordinatında hesaplanır (`pointerToView`).
+  - `drag`: touchpad; pointerdown'da ışınlanma yok, hareket × `DRAG_GAIN` (1.25).
+- Parmak puck'ı örtmesin diye: puck etrafında `HALO_PX` (34px) halka; gerçek
+  vuruşta `hitFx` genişleyen halka (host `pend.hitAt`, misafir `fx.h` + `d.p`).
+  Dokunmatikte varsayılan puck `large` (kayıtlı tercih yoksa).
+- `Game._peek()` test için salt-okunur durum (paddle, lay, ctrl, hits).
 - Davet linki `#oda=<şifre>`: bekleme ekranında `navigator.share` (yoksa
   panoya kopyala); açılışta hash okunur, temizlenir, otomatik katılır.
 - `UI.onShow` kancası: wait/game/end(çok oyuncu) ekranında Wake Lock

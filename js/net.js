@@ -19,8 +19,10 @@ const Net = (() => {
 
   // Sifre -> PeerJS kimligi (sifrenin kendisi sunucuya gitmez, ozeti gider).
   // Buyuk/kucuk harf ve bosluk farki onemsiz: iOS klavyesi ilk harfi buyutebilir.
+  // i/ı/İ/I hepsi 'i' sayilir: Turkce klavye 'i'yi 'İ', Ingilizce 'I' yapar;
+  // toLocaleLowerCase('tr') ise 'I'yi 'ı' yapip ayni sifreyi farkli odaya goturur.
   function roomId(pw) {
-    const s = String(pw).trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr');
+    const s = String(pw).trim().replace(/\s+/g, ' ').replace(/[İIıi]/g, 'i').toLowerCase();
     let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
     for (let i = 0; i < s.length; i++) {
       const c = s.charCodeAt(i);

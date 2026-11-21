@@ -46,6 +46,20 @@
     UI.markPuck(s);
   }
 
+  // Kontrol modu: her oyuncunun kendi tercihi (aga gitmez)
+  const CTRL_HINT = {
+    offset: 'Paddle parmağının biraz üstünde durur, böylece vuruşu görürsün. Kalene yaklaştıkça parmağına iner.',
+    drag: 'Parmağını kendi yarı sahanda istediğin yere koy ve kaydır; paddle o kadar hareket eder.'
+  };
+  function applyCtrl(m) {
+    const c = m === 'drag' ? 'drag' : 'offset';
+    try { localStorage.setItem('ah_ctrl', c); } catch (e) {}
+    Game.setControl(c);
+    document.querySelectorAll('[data-ctrl]').forEach((b) =>
+      b.classList.toggle('active', b.dataset.ctrl === c));
+    UI.$('ctrl-hint').textContent = CTRL_HINT[c];
+  }
+
   // Misafir: maca KURANIN gorunum+puck'ini uygula (kendi tercihini
   // localStorage'da bozmadan; sadece bu mac icin)
   function useMatchLook(skin, puck) {
@@ -76,6 +90,9 @@
 
     const puckEl = ev.target.closest('[data-puck]');
     if (puckEl) { applyPuck(puckEl.dataset.puck); return; }
+
+    const ctrlEl = ev.target.closest('[data-ctrl]');
+    if (ctrlEl) { applyCtrl(ctrlEl.dataset.ctrl); return; }
 
     const el = ev.target.closest('[data-action]');
     if (!el) return;
@@ -261,9 +278,14 @@
   let savedSkin = 'neon';
   try { savedSkin = localStorage.getItem('ah_skin') || 'neon'; } catch (e) {}
   applySkin(savedSkin);
-  let savedPuck = 'med';
-  try { savedPuck = localStorage.getItem('ah_puck') || 'med'; } catch (e) {}
+  // Telefonda (dokunmatik) varsayilan puck buyuk: parmak altinda daha iyi gorunur
+  const touch = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+  let savedPuck = touch ? 'large' : 'med';
+  try { savedPuck = localStorage.getItem('ah_puck') || savedPuck; } catch (e) {}
   applyPuck(savedPuck);
+  let savedCtrl = 'offset';
+  try { savedCtrl = localStorage.getItem('ah_ctrl') || 'offset'; } catch (e) {}
+  applyCtrl(savedCtrl);
   UI.show('lobby');
   UI.lobbyMode('home');
 
