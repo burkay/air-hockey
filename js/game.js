@@ -7,7 +7,7 @@ const Game = (() => {
   const W = 100;          // masa genisligi
   const H = 200;          // masa yuksekligi
   let PR = 3.2;           // puck yaricapi (kucuk/orta/buyuk ile degisir)
-  const MR = 6.5;         // paddle yaricapi
+  const MR = 8.5;         // paddle yaricapi (telefonda parmaktan buyuk: Pro Max'te ~65px cap)
   const PUCK_SIZES = { small: 2.4, med: 3.2, large: 4.4 };
   function setPuckSize(n) { PR = PUCK_SIZES[n] || PUCK_SIZES.med; }
   const GOAL_W = 38;      // kale acikligi
@@ -17,7 +17,10 @@ const Game = (() => {
   const MAX_SPD = 240;    // puck hiz tavani (tunelleme/absurt hiz engeli)
   const PADDLE_VMAX = 520;// el hizi ust siniri (touch/ag jitter firlatmasini onler)
   const STALL_SPD = 14;   // bunun altinda "cok yavas" sayilir
-  const STALL_TIME = 2200;// bu kadar sure cok yavas kalirsa hakem yeniden servis
+  const STALL_TIME = 2.2; // sn: bu kadar sure cok yavas kalirsa hakem yeniden servis
+  const TRAP_DIST = 8;    // puck bu yaricapli alandan cikamiyorsa "sikismis"
+  const TRAP_TIME = 2.5;  // sn: bu kadar sikisik kalirsa hakem yeniden servis
+  const AI_BACKOFF = 0.6; // sn: puck bu kadar sikisik kalirsa AI geri cekilir
   const STEP = 1 / 120;   // sabit fizik adimi
 
   // --- Skin'ler (yalnizca gorsel; ag/oyun mantigi etkilenmez) ---
@@ -91,16 +94,10 @@ const Game = (() => {
   // Efektler: fizik olaylarini biriktir, karede ses cal + age ekle
   let pend = { hit: false, wall: false };
   let sendFx = {};
-  const fx = { goalLeft: 0, side: null, isMy: false, shake: 0, parts: [], hits: [] };
-  const HIT_LIFE = 0.3;       // vurus halkasi suresi (sn)
-  const HALO_PX = 34;         // puck etrafindaki halka yaricapi (CSS px; parmaktan buyuk)
-  function hitFx(x, y) {
-    fx.hits.push({ x, y, life: HIT_LIFE });
-    if (fx.hits.length > 6) fx.hits.shift();
-  }
+  const fx = { goalLeft: 0, side: null, isMy: false, shake: 0, parts: [] };
 
   // Puck cok uzun sure cok yavas kalirsa (kimse oynamiyor) hakem reseti
-  let slowSince = 0;
+  let slowT = 0, trapT = 0, trapAt = { x: 0, y: 0 };
 
   function reset(full) {
     puck = { x: W / 2, y: H / 2, vx: 0, vy: 0 };
@@ -120,8 +117,8 @@ const Game = (() => {
     tgtGuest = { x: W / 2, y: H * 0.18 };
     pend = { hit: false, wall: false };
     sendFx = {};
-    fx.goalLeft = 0; fx.side = null; fx.shake = 0; fx.parts = []; fx.hits = [];
-    slowSince = 0;
+    fx.goalLeft = 0; fx.side = null; fx.shake = 0; fx.parts = [];
+    resetStall();
     pushHud();
   }
 
@@ -160,7 +157,8 @@ const Game = (() => {
   //  'drag'   - touchpad gibi: paddle parmagin hareketi kadar kayar, parmak
   //             kendi yari sahasinda istedigi yerde durabilir (isinlanma yok).
   let ctrl = 'offset';
-  const OFFSET_PX = 64;       // parmak -> paddle merkezi (CSS px, ~1 cm)
+  const FINGER_CLEAR = 30;    // paddle alt kenari ile parmak temas noktasi arasi (CSS px)
+  function offsetPx() { return MR * lay.scale + FINGER_CLEAR; }   // parmak -> paddle merkezi
   const OFFSET_TAPER = 0.2;   // kendi kale cizgisinden H*0.2 icinde ofset 0'a iner
   const DRAG_GAIN = 1.25;     // kaydirmada parmak hareketi carpani
   let dragLast = null;
@@ -205,7 +203,7 @@ const Game = (() => {
       vx = Math.max(0, Math.min(W, p.x));
       const fy = Math.max(0, Math.min(H, p.y));
       const k = Math.max(0, Math.min(1, (H - fy) / (H * OFFSET_TAPER)));
-      vy = fy - (OFFSET_PX / lay.scale) * k;
+      vy = fy - (offsetPx() / lay.scale) * k;
     }
     const t = fromView(vx, vy);
     local.x = t.x; local.y = t.y;
@@ -222,7 +220,12 @@ const Game = (() => {
 
     let tx = W / 2, ty = homeY;
 
-    if (phase === 'play') {
+    // Puck sikismis gorunuyorsa (or. AI onu koseye bastiriyor) kaleye cekil:
+    // puck kendi sekmesiyle kurtulsun; kurtulmazsa TRAP_TIME'da hakem servisi.
+    const atWall = puck.x < PR + MR || puck.x > W - PR - MR || puck.y < PR + MR;
+    if (phase === 'play' && atWall && trapT > AI_BACKOFF) {
+      tx = W / 2; ty = homeY;
+    } else if (phase === 'play') {
       const onAiHalf = puck.y < H / 2;
       const towardAiGoal = puck.vy < -5;            // puck AI kalesine dogru
       const chaseLine = (H / 2) * (0.55 + 0.45 * cfg.aggro);
@@ -309,21 +312,29 @@ const Game = (() => {
       puck.vy *= MAX_SPD / sp;
     }
 
-    // Takilma: cok uzun sure cok yavas kaldiysa (kimse oynamiyor) hakem reseti
-    if (sp < STALL_SPD) {
-      const t = performance.now();
-      if (!slowSince) slowSince = t;
-      else if (t - slowSince > STALL_TIME) faceoff();
+    // Takilma (sabit adim sayaci; mutlak saat yok):
+    //  1) cok uzun sure cok yavas (kimse oynamiyor)
+    //  2) SIKISMA: puck hizli sekse de kucuk bir alandan cikamiyor (or. paddle
+    //     onu koseye bastiriyor -> ses gelir ama oyun ilerlemez). Hiz bakmaz.
+    if (sp < STALL_SPD) slowT += STEP; else slowT = 0;
+    if (Math.hypot(puck.x - trapAt.x, puck.y - trapAt.y) > TRAP_DIST) {
+      trapAt = { x: puck.x, y: puck.y };
+      trapT = 0;
     } else {
-      slowSince = 0;
+      trapT += STEP;
     }
+    if (slowT > STALL_TIME || trapT > TRAP_TIME) faceoff();
   }
 
   // Hakem: puck'i merkeze koyup rastgele yone yumusak servis (gol degil)
   function faceoff() {
     const ang = Math.random() * Math.PI * 2;
     puck = { x: W / 2, y: H / 2, vx: Math.cos(ang) * 85, vy: Math.sin(ang) * 85 };
-    slowSince = 0;
+    resetStall();
+  }
+  function resetStall() {
+    slowT = 0; trapT = 0;
+    trapAt = { x: puck.x, y: puck.y };
   }
 
   // Puck-mallet carpismasi: mallet el kontrollu = sonsuz kutle.
@@ -391,7 +402,7 @@ const Game = (() => {
       puck.vy += add * ny;
     }
     // Ses/efekt yalniz gercek vurusta (yaklasirken) - yaslanmada degil
-    if (realHit) { pend.hit = true; pend.hitAt = { x: puck.x, y: puck.y }; }
+    if (realHit) pend.hit = true;
   }
 
   // Gol gorsel + ses efekti (host/AI: score()'da; misafir: handleState'de)
@@ -513,9 +524,7 @@ const Game = (() => {
       if (typeof Sfx !== 'undefined') {
         if (d.fx.h) Sfx.hit();
         if (d.fx.w) Sfx.wall();
-      }
-      if (d.fx.h) hitFx(d.p.x, d.p.y);
-      if (d.fx.g) goalFx(d.fx.g);
+      }      if (d.fx.g) goalFx(d.fx.g);
     }
     if (phase === 'over') fireGameOver();
   }
@@ -553,11 +562,7 @@ const Game = (() => {
         while (acc >= STEP && steps < 6) { integrate(); acc -= STEP; steps++; }
         if (acc > STEP * 6) acc = 0;
         // bu karenin fizik olaylarini sesle + age yansit
-        if (pend.hit) {
-          if (typeof Sfx !== 'undefined') Sfx.hit();
-          sendFx.h = true; pend.hit = false;
-          if (pend.hitAt) hitFx(pend.hitAt.x, pend.hitAt.y);
-        }
+        if (pend.hit) { if (typeof Sfx !== 'undefined') Sfx.hit(); sendFx.h = true; pend.hit = false; }
         if (pend.wall) { if (typeof Sfx !== 'undefined') Sfx.wall(); sendFx.w = true; pend.wall = false; }
       } else {
         // Misafir: yetkili puck'i HIZIYLA ekstrapole et (dead-reckoning) ->
@@ -637,29 +642,6 @@ const Game = (() => {
     // disk
     const pv = toView(puck.x, puck.y);
     const ppx = PX(pv.x), ppy = PY(pv.y);
-    // Halka: parmaktan buyuk -> puck parmagin altindayken de kenarlari gorunur
-    ctx.save();
-    ctx.globalAlpha = 0.10;
-    circle(ppx, ppy, HALO_PX, skin.puck);
-    ctx.globalAlpha = 0.45;
-    ctx.beginPath();
-    ctx.arc(ppx, ppy, HALO_PX, 0, Math.PI * 2);
-    ctx.strokeStyle = skin.puck; ctx.lineWidth = 2; ctx.stroke();
-    ctx.restore();
-    // Vurus halkalari (temas noktasindan genisler)
-    for (let i = fx.hits.length - 1; i >= 0; i--) {
-      const hh = fx.hits[i];
-      hh.life -= dt;
-      if (hh.life <= 0) { fx.hits.splice(i, 1); continue; }
-      const prog = 1 - hh.life / HIT_LIFE;          // 0 -> 1
-      const hv = toView(hh.x, hh.y);
-      ctx.save();
-      ctx.globalAlpha = 0.9 * (1 - prog);
-      ctx.beginPath();
-      ctx.arc(PX(hv.x), PY(hv.y), PR * lay.scale + 6 + prog * 34, 0, Math.PI * 2);
-      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3 * (1 - prog) + 1; ctx.stroke();
-      ctx.restore();
-    }
     circle(ppx, ppy, PR * lay.scale, skin.puck);
     if (skin.puckRing) {
       ctx.beginPath();
@@ -879,7 +861,9 @@ const Game = (() => {
   }
 
   // Test/hata ayiklama icin salt-okunur durum
-  function _peek() { return { role, ctrl, lay: { ...lay }, pHost: { ...pHost }, pGuest: { ...pGuest }, hits: fx.hits.length }; }
+  function _peek() { return { role, ctrl, phase, lay: { ...lay }, puck: { ...puck }, pHost: { ...pHost }, pGuest: { ...pGuest }, MR, PR, trapT }; }
+  // Yalniz test: puck'i belirli bir duruma koy (or. kose sikismasi senaryosu)
+  function _setPuck(x, y, vx, vy) { puck = { x, y, vx, vy }; phase = 'play'; countdown = 0; }
 
-  return { init, start, restart, stop, layout, setSkin, setPuckSize, setControl, handleInput, handleState, _peek };
+  return { init, start, restart, stop, layout, setSkin, setPuckSize, setControl, handleInput, handleState, _peek, _setPuck };
 })();

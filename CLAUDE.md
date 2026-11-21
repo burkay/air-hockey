@@ -49,8 +49,14 @@ iPhone tarayıcısından air hockey. İki mod:
 - Kale ağzı: puck kale çizgisini geçince (gol tetiği `H+2·PR`'a ulaşana
   kadar) `vy` zorla ≥40 (içeri) yapılır — yavaş puck ağızda TAKILMAZ
   (hız tabanı kaldırıldığı için kritik; bu olmadan oyun gol anında donar).
-- Soft-lock yerine hakem reseti: puck `STALL_TIME` (2.2sn) boyunca
-  `STALL_SPD` (14) altında kalırsa `faceoff()` merkeze koyup yeniden servis.
+- Soft-lock yerine hakem reseti (sabit adım sayacı, `STEP` toplanır):
+  puck `STALL_TIME` (2.2sn) `STALL_SPD` (14) altında kalırsa VEYA `TRAP_TIME`
+  (2.5sn) boyunca `TRAP_DIST` (8) yarıçaplı alandan çıkamazsa `faceoff()`.
+  İkincisi köşe sıkışması içindir: paddle puck'ı köşeye bastırınca puck hızlı
+  sekip durur (ses gelir, oyun donar) — hız kontrolü bunu yakalamaz.
+- AI köşe sıkıştırmasın: puck duvar dibinde ve `trapT > AI_BACKOFF` (0.6sn)
+  ise AI kalesine çekilir. AI "puck'ın arkasına geç" hedefi köşede tam
+  puck'ın üstüne düştüğü için sıkıştırıyordu.
 - `PADDLE_VMAX=520` el hızı sınırı (touch/ağ jitter fırlatmasını önler).
 - AI: `pGuest` (üst paddle) kontrol eder. Presetler `AI_PRESETS`
   (easy/normal/hard): spd, predict (duvar sekmeli tahmin), aggro, home, err.
@@ -130,14 +136,17 @@ iPhone tarayıcısından air hockey. İki mod:
   'I'→'ı' yapar, aynı şifre farklı odaya gider.
 - **Kontrol modu** (`Game.setControl`, lobide `[data-ctrl]`,
   `localStorage('ah_ctrl')`, ağa gitmez):
-  - `offset` (varsayılan): paddle parmağın `OFFSET_PX` (64 CSS px) üstünde;
-    kendi kale çizgisinden `H*OFFSET_TAPER` içinde ofset doğrusal 0'a iner
-    (kale ağzına inebilsin). Görünüm koordinatında hesaplanır (`pointerToView`).
+  - `offset` (varsayılan): paddle merkezi parmağın `offsetPx()` = paddle
+    yarıçapı + `FINGER_CLEAR` (30 CSS px) üstünde; kendi kale çizgisinden
+    `H*OFFSET_TAPER` içinde ofset doğrusal 0'a iner (kale ağzına inebilsin).
+    Görünüm koordinatında hesaplanır (`pointerToView`).
   - `drag`: touchpad; pointerdown'da ışınlanma yok, hareket × `DRAG_GAIN` (1.25).
-- Parmak puck'ı örtmesin diye: puck etrafında `HALO_PX` (34px) halka; gerçek
-  vuruşta `hitFx` genişleyen halka (host `pend.hitAt`, misafir `fx.h` + `d.p`).
+- Paddle `MR=8.5` (Pro Max'te ~65px çap; parmaktan büyük olsun diye istendi).
+- Puck etrafına halka / vuruşta dalga efekti EKLEME: Burkay sevmedi; sabit
+  halka ayrıca puck boyutu farkını gizliyordu ("puck ayarı çalışmıyor" sanıldı).
   Dokunmatikte varsayılan puck `large` (kayıtlı tercih yoksa).
-- `Game._peek()` test için salt-okunur durum (paddle, lay, ctrl, hits).
+- Çok oyuncuda puck boyutunu KURAN belirler; katılanın seçimi o maçta geçmez.
+- `Game._peek()` / `Game._setPuck()` yalnız test içindir (durum okuma, köşe senaryosu).
 - Davet linki `#oda=<şifre>`: bekleme ekranında `navigator.share` (yoksa
   panoya kopyala); açılışta hash okunur, temizlenir, otomatik katılır.
 - `UI.onShow` kancası: wait/game/end(çok oyuncu) ekranında Wake Lock
