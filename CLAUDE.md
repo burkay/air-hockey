@@ -73,9 +73,9 @@ iPhone tarayıcısından air hockey. İki mod:
 - `game.js` içinde `SKINS` (`neon` varsayılan, `arcade` = klasik BCP mavi).
   `Game.setSkin(name)` aktif skin'i seçer; `render()`/`drawGoal()`/
   `drawPaddle()` renkleri skin'den okur.
-- **Çok oyuncuda görünüm+puck'ı KURAN belirler:** host `create_room`'da
-  `skin`+`puck` yollar, sunucu odada saklar, misafire `joined`/`room_created`
-  ile gider. `main.js useMatchLook()` misafirde host'unkini uygular
+- **Çok oyuncuda görünüm+puck'ı KURAN belirler:** host bağlanan misafire
+  `hello` mesajıyla `rules`+`skin`+`puck` yollar, misafirde `joined` olayı
+  olarak gelir. `main.js useMatchLook()` misafirde host'unkini uygular
   (localStorage'a yazmadan; misafirin kendi tercihi korunur). Puck ayrıca
   `state.pr` ile sürekli host-yetkili. Tek kişilik/host kendi seçimini kullanır.
 - Arcade: mavi gradient zemin, beyaz çizgi+daire+nokta, kırmızı kale yayı
