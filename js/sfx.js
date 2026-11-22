@@ -86,6 +86,7 @@ const Sfx = (() => {
   return {
     unlock,
     toggleMute() { muted = !muted; return muted; },
+    setMuted(m) { muted = !!m; },
     isMuted() { return muted; },
 
     hit() { if (throttle('hit', 45)) tone(330, 0.09, 'square', 0.5, 0.55); },

@@ -3,9 +3,8 @@
 Telefon tarayıcısından air hockey. İki mod:
 
 - **Bilgisayara Karşı:** tek başına AI rakip (Kolay / Orta / Zor), ağ yok.
-- **Arkadaşınla (uzaktan):** **şifre ile eşleşme** — bir kişi oyunu kurup şifre
-  ve maç kuralını seçer (ilk 7 / ilk 11 / süreli 2 dk), arkadaşı o şifreyi
-  girip katılır.
+- **Arkadaşınla (uzaktan):** "Davet et" 4 haneli bir kod ve link üretir; linke
+  dokunan doğrudan maça girer. İstersen kendi şifreni de belirleyebilirsin.
 
 Ek: skin (Neon / Arcade), puck boyutu (Küçük / Orta / Büyük), Web Audio ses
 efektleri, gerçekçi fizik. Kısa ağ kopmaları maçı bozmaz (otomatik yeniden
@@ -21,14 +20,15 @@ birbirine yakınsa (ör. Sofya ↔ İstanbul) gecikme düşüktür.
 
 ## Nasıl oynanır
 
-- **Tek kişilik:** Lobide **"Bilgisayara Karşı"** → kural + zorluk seç → başla.
-- **Arkadaşınla:** Bir oyuncu **"Oyun Kur"** + şifre + kural; diğeri
-  **"Oyuna Katıl"** + aynı şifre.
+- **Tek kişilik:** zorluk seç → **"Hemen oyna"**. Son seçimin hatırlanır.
+- **Arkadaşınla:** biri **"Davet et"** → linki paylaşır; diğeri linke dokunur ya da
+  **"Kodla katıl"** ile kodu yazar.
+- **Ayarlar** (sağ üst): maç kuralı, puck, masa, kontrol, ses.
+- **Duraklat** (oyunda sol üst): devam, ses, kontrol, yeniden başla, çık.
 - Oyun: parmakla kendi paddle'ını (alt taraf) sürükle; herkes kendi ekranında
-  **alttaki kaleyi** savunur. Maç bitince **"Yeniden Oyna"**.
-- Lobide **Görünüm** (Neon/Arcade) ve **Puck** (Küçük/Orta/Büyük) seçilir;
-  çok oyunculuda **kuranın** seçimi geçerli olur. Sağ üstte **🔊** ile ses
-  aç/kapa (iOS: ilk dokunuştan sonra ses gelir, sessiz anahtarı kapalı olmalı).
+  **alttaki kaleyi** savunur. Maç bitince **"Rövanş"** (iki taraf da onaylar).
+- Çok oyunculuda kural, puck ve masayı **oyunu kuran** belirler. iOS: ses ilk
+  dokunuştan sonra gelir, sessiz anahtarı kapalı olmalı.
 - "Rakibe bağlanılamadı" hatası: bazı mobil operatörler doğrudan bağlantıyı
   engeller; birinizin Wi-Fi'ye (ya da mobil veriye) geçmesi genelde çözer.
 

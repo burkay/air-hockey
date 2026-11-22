@@ -97,7 +97,7 @@ const Net = (() => {
     switch (m.t) {
       case 's': emit('state', m.d); break;
       case 'i': emit('input', m.d); break;
-      case 'rm': emit('rematch'); break;
+      case 'rm': emit('rematch', m.d); break;
       case 'rq': emit('rematch_request'); break;
       case 'ping': if (m.ts != null) send({ t: 'pong', ts: m.ts }); break;
       case 'pong': {
@@ -133,7 +133,7 @@ const Net = (() => {
     if (!conn) return;
     closeConn();
     if (role === 'host') {
-      emit('peer_dropped', { who: 'guest' });
+      emit('peer_dropped', { who: 'guest', ms: GRACE_MS });
       stop(graceT);
       graceT = setTimeout(() => {
         graceT = null; guestToken = null;
@@ -142,7 +142,7 @@ const Net = (() => {
     } else if (!opened) {
       fail('p2p_fail', 'Rakibe bağlanılamadı. Biriniz Wi-Fi ile mobil veri arasında geçiş yapıp tekrar denesin.');
     } else {
-      emit('peer_dropped', { who: 'host' });
+      emit('peer_dropped', { who: 'host', ms: GRACE_MS });
       stop(graceT);
       graceT = setTimeout(() => { teardown(); emit('peer_left', { who: 'host' }); }, GRACE_MS);
       retry();
@@ -260,7 +260,7 @@ const Net = (() => {
       // yeniden baglanirsa (visibilitychange -> wake) katilma yine olur.
       p.on('error', (err) => {
         if (peer !== p || opened) return;   // macta yeniden denemede gecici hatalar normal
-        if (err.type === 'peer-unavailable') fail('no_room', 'Bu şifreyle açık bir oyun yok.');
+        if (err.type === 'peer-unavailable') fail('no_room', 'Bu kodla açık bir oyun yok. Arkadaşının ekranı açık mı?');
         else fail('net', 'Eşleştirme sunucusuna ulaşılamadı. Tekrar dene.');
       });
       joinT = setTimeout(() => {
@@ -272,8 +272,9 @@ const Net = (() => {
     rtt() { return rttMs; },
     sendState(d) { send({ t: 's', d }); },
     sendInput(d) { send({ t: 'i', d }); },
-    rematch() { send({ t: 'rm' }); },
-    rematchRequest() { send({ t: 'rq' }); },
+    // Host: yeni mac (kural/gorunum degismis olabilir -> misafire de gider)
+    rematch(d) { if (d) look = { rules: d.rules, skin: d.skin, puck: d.puck }; send({ t: 'rm', d }); },
+    rematchRequest() { send({ t: 'rq' }); },      // "rovansa hazirim" (iki yonde)
     leave() {
       send({ t: 'bye' });
       const p = peer;

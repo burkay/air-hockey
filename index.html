@@ -8,84 +8,65 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Air Hockey" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#0b1d2a" />
+  <meta name="theme-color" content="#071520" />
   <meta name="format-detection" content="telephone=no" />
   <title>Air Hockey</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%226%22 fill=%22%2300e5ff%22/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="icon-180.png" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="css/style.css?v=7" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap" />
+  <link rel="stylesheet" href="css/style.css?v=8" />
 </head>
 <body>
-  <!-- LOBI -->
+  <!-- LOBI: menu = masanin kendisi (ust yari arkadas, alt yari bilgisayar) -->
   <section id="screen-lobby" class="screen active">
-    <div class="panel">
-      <h1>Air Hockey</h1>
-      <p class="subtitle">Arkadaşınla uzaktan oyna</p>
+    <div id="lobby-table" class="table holes" data-mode="home">
+      <header class="bar">
+        <h1>Air Hockey</h1>
+        <button type="button" class="icon-btn" data-action="open-settings" aria-label="Ayarlar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"/><circle cx="16" cy="7" r="2.4"/><circle cx="8" cy="17" r="2.4"/></svg>
+        </button>
+      </header>
 
-      <div id="lobby-home">
-        <button class="btn primary" data-action="show-ai">Bilgisayara Karşı</button>
-        <button class="btn" data-action="show-create">Arkadaşınla: Oyun Kur</button>
-        <button class="btn" data-action="show-join">Arkadaşınla: Katıl</button>
-        <div class="skin-row">
-          <span class="skin-label">Görünüm</span>
-          <button type="button" class="skin-btn" data-skin="neon">Neon</button>
-          <button type="button" class="skin-btn" data-skin="arcade">Arcade</button>
+      <div id="lobby-home" class="halves">
+        <div class="half friend">
+          <h2>Arkadaşınla</h2>
+          <p class="sub">Link gönder, şifre yazmadan katılsın.</p>
+          <div class="row2">
+            <button type="button" id="invite-btn" class="btn rival" data-action="invite">Davet et</button>
+            <button type="button" class="btn line" data-action="show-join">Kodla katıl</button>
+          </div>
         </div>
-        <div class="skin-row">
-          <span class="skin-label">Puck</span>
-          <button type="button" class="skin-btn" data-puck="small">Küçük</button>
-          <button type="button" class="skin-btn" data-puck="med">Orta</button>
-          <button type="button" class="skin-btn" data-puck="large">Büyük</button>
-        </div>
-        <div class="skin-row">
-          <span class="skin-label">Kontrol</span>
-          <button type="button" class="skin-btn" data-ctrl="offset">Parmak üstü</button>
-          <button type="button" class="skin-btn" data-ctrl="drag">Kaydırma</button>
-        </div>
-        <p id="ctrl-hint" class="hint"></p>
+        <div class="midline" aria-hidden="true"><i></i></div>
+        <form id="form-ai" class="half ai">
+          <h2>Bilgisayara karşı</h2>
+          <p class="sub" id="ai-summary"></p>
+          <div class="seg" role="radiogroup" aria-label="Zorluk">
+            <label><input type="radio" name="ai-diff" value="easy" /><span>Kolay</span></label>
+            <label><input type="radio" name="ai-diff" value="normal" checked /><span>Orta</span></label>
+            <label><input type="radio" name="ai-diff" value="hard" /><span>Zor</span></label>
+          </div>
+          <button type="submit" class="btn primary big">Hemen oyna</button>
+        </form>
       </div>
 
-      <form id="form-ai" class="lobby-form hidden">
-        <fieldset class="seg">
-          <legend>Maç kuralı</legend>
-          <label><input type="radio" name="ai-rules" value="first7" checked /><span>İlk 7</span></label>
-          <label><input type="radio" name="ai-rules" value="first11" /><span>İlk 11</span></label>
-          <label><input type="radio" name="ai-rules" value="timed" /><span>2 dakika</span></label>
-        </fieldset>
-        <fieldset class="seg">
-          <legend>Zorluk</legend>
-          <label><input type="radio" name="ai-diff" value="easy" /><span>Kolay</span></label>
-          <label><input type="radio" name="ai-diff" value="normal" checked /><span>Orta</span></label>
-          <label><input type="radio" name="ai-diff" value="hard" /><span>Zor</span></label>
-        </fieldset>
-        <button type="submit" class="btn primary">Başla</button>
+      <form id="form-join" class="sub-form hidden">
+        <h2>Kodla katıl</h2>
+        <label for="join-password">Arkadaşının kodu ya da şifresi</label>
+        <input type="text" id="join-password" class="code-input" autocomplete="off" autocapitalize="characters"
+               autocorrect="off" spellcheck="false" enterkeyhint="go" maxlength="40" placeholder="BK42" />
+        <button type="submit" class="btn primary big">Katıl</button>
         <button type="button" class="btn ghost" data-action="back">Geri</button>
       </form>
 
-      <form id="form-create" class="lobby-form hidden">
-        <label>Şifre belirle
-          <input type="text" id="create-password" autocomplete="off" autocapitalize="off"
-                 autocorrect="off" spellcheck="false" enterkeyhint="go"
-                 maxlength="40" placeholder="örn: hokey42" />
-        </label>
-        <fieldset class="seg">
-          <legend>Maç kuralı</legend>
-          <label><input type="radio" name="rules" value="first7" checked /><span>İlk 7</span></label>
-          <label><input type="radio" name="rules" value="first11" /><span>İlk 11</span></label>
-          <label><input type="radio" name="rules" value="timed" /><span>2 dakika</span></label>
-        </fieldset>
-        <button type="submit" class="btn primary">Kur</button>
-        <button type="button" class="btn ghost" data-action="back">Geri</button>
-      </form>
-
-      <form id="form-join" class="lobby-form hidden">
-        <label>Arkadaşının şifresi
-          <input type="text" id="join-password" autocomplete="off" autocapitalize="off"
-                 autocorrect="off" spellcheck="false" enterkeyhint="go"
-                 maxlength="40" placeholder="şifreyi gir" />
-        </label>
-        <button type="submit" class="btn primary">Katıl</button>
+      <form id="form-create" class="sub-form hidden">
+        <h2>Kendi şifreni belirle</h2>
+        <label for="create-password">Arkadaşın bu şifreyle katılır</label>
+        <input type="text" id="create-password" class="code-input" autocomplete="off" autocapitalize="off"
+               autocorrect="off" spellcheck="false" enterkeyhint="go" maxlength="40" placeholder="hokey42" />
+        <button type="submit" class="btn primary big">Oyunu kur</button>
         <button type="button" class="btn ghost" data-action="back">Geri</button>
       </form>
 
@@ -93,64 +74,150 @@
     </div>
   </section>
 
-  <!-- BEKLEME -->
+  <!-- AYARLAR -->
+  <section id="screen-settings" class="screen">
+    <div class="sheet-page holes">
+      <header class="bar">
+        <button type="button" class="icon-btn" data-action="close-settings" aria-label="Geri">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h2>Ayarlar</h2>
+        <span class="icon-gap"></span>
+      </header>
+      <fieldset class="seg">
+        <legend>Maç kuralı</legend>
+        <label><input type="radio" name="rules" value="first7" checked /><span>İlk 7</span></label>
+        <label><input type="radio" name="rules" value="first11" /><span>İlk 11</span></label>
+        <label><input type="radio" name="rules" value="timed" /><span>2 dakika</span></label>
+      </fieldset>
+      <div class="seg" role="group" aria-label="Puck boyutu">
+        <p class="legend">Puck</p>
+        <button type="button" class="seg-btn" data-puck="small">Küçük</button>
+        <button type="button" class="seg-btn" data-puck="med">Orta</button>
+        <button type="button" class="seg-btn" data-puck="large">Büyük</button>
+      </div>
+      <div class="seg two" role="group" aria-label="Görünüm">
+        <p class="legend">Masa</p>
+        <button type="button" class="seg-btn" data-skin="neon">Neon</button>
+        <button type="button" class="seg-btn" data-skin="arcade">Arcade</button>
+      </div>
+      <p class="hint" id="look-hint">Arkadaşınla oynarken kural, puck ve masayı oyunu kuran belirler.</p>
+      <div class="seg two" role="group" aria-label="Kontrol">
+        <p class="legend">Kontrol</p>
+        <button type="button" class="seg-btn" data-ctrl="offset">Parmak üstü</button>
+        <button type="button" class="seg-btn" data-ctrl="drag">Kaydırma</button>
+      </div>
+      <p class="hint" id="ctrl-hint"></p>
+      <div class="seg two" role="group" aria-label="Ses">
+        <p class="legend">Ses</p>
+        <button type="button" class="seg-btn" data-sound="on">Açık</button>
+        <button type="button" class="seg-btn" data-sound="off">Kapalı</button>
+      </div>
+      <button type="button" class="btn primary big" data-action="close-settings">Tamam</button>
+    </div>
+  </section>
+
+  <!-- DAVET / BEKLEME -->
   <section id="screen-wait" class="screen">
-    <div class="panel">
-      <h2>Arkadaşın bekleniyor...</h2>
-      <p class="subtitle">Şifre:</p>
-      <div id="wait-password" class="code"></div>
-      <button class="btn primary" data-action="share">Davet linkini paylaş</button>
-      <p id="share-note" class="subtitle">Arkadaşın linki açınca ya da "Katıl"a basıp bu şifreyi girince oyun başlar.</p>
-      <button class="btn ghost" data-action="cancel-wait">İptal</button>
+    <div class="sheet-page holes">
+      <header class="bar">
+        <button type="button" class="icon-btn" data-action="cancel-wait" aria-label="Vazgeç">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <span id="wait-summary" class="sub"></span>
+      </header>
+      <h2 class="title">Arkadaşını çağır</h2>
+      <p class="sub">Linke dokunan doğrudan maça girer. Bu ekran açık kalsın.</p>
+      <div id="wait-password" class="code-tiles" aria-label="Oda kodu"></div>
+      <button type="button" class="btn primary big" data-action="share">Linki paylaş</button>
+      <button type="button" class="btn line" data-action="copy-code">Kodu kopyala</button>
+      <p id="share-note" class="sub note" role="status"></p>
+      <div class="versus" aria-hidden="true">
+        <i class="mallet me"></i><b></b><i class="mallet empty"></i>
+        <span>Sen hazırsın</span><span>Rakip bekleniyor</span>
+      </div>
+      <button type="button" class="btn ghost" data-action="show-create">Kendi şifreni belirle</button>
     </div>
   </section>
 
   <!-- OYUN -->
   <section id="screen-game" class="screen">
-    <div id="hud">
-      <div class="score">
-        <span id="score-top">0</span>
-        <span class="score-sep">:</span>
-        <span id="score-bottom">0</span>
-      </div>
-      <div id="timer" class="timer hidden">2:00</div>
-    </div>
     <canvas id="board"></canvas>
+    <p class="sr-only" aria-live="polite">Rakip <span id="score-top">0</span>, sen <span id="score-bottom">0</span></p>
+    <div id="timer" class="chip timer hidden">2:00</div>
     <div id="center-msg" class="center-msg"></div>
-    <div id="netmsg" class="netmsg"></div>
-    <button id="mute-btn" class="mute-btn" aria-label="Ses">🔊</button>
-    <button id="exit-btn" class="exit-btn" data-action="ask-exit" aria-label="Oyundan çık">✕</button>
-    <div id="exit-dialog" class="exit-dialog hidden" role="alertdialog" aria-modal="true"
-         aria-labelledby="exit-title" aria-describedby="exit-note">
-      <div class="panel">
-        <h2 id="exit-title">Çıkmak istediğinize emin misiniz?</h2>
-        <p id="exit-note" class="subtitle"></p>
-        <button id="exit-no" class="btn primary" data-action="exit-no">Hayır, devam et</button>
-        <button class="btn danger" data-action="to-lobby">Evet, çık</button>
+    <button type="button" id="pause-btn" class="icon-btn pause-btn" data-action="pause" aria-label="Duraklat">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg>
+    </button>
+    <div id="ping" class="chip ping hidden" role="status"><i></i><span></span></div>
+
+    <div id="pause" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+      <div class="sheet">
+        <div id="pause-menu">
+          <h2 id="pause-title">Duraklatıldı</h2>
+          <p id="pause-note" class="sub"></p>
+          <button type="button" id="pause-resume" class="btn primary big" data-action="resume">Devam et</button>
+          <div class="seg two" role="group" aria-label="Ses">
+            <p class="legend">Ses</p>
+            <button type="button" class="seg-btn" data-sound="on">Açık</button>
+            <button type="button" class="seg-btn" data-sound="off">Kapalı</button>
+          </div>
+          <div class="seg two" role="group" aria-label="Kontrol">
+            <p class="legend">Kontrol</p>
+            <button type="button" class="seg-btn" data-ctrl="offset">Parmak üstü</button>
+            <button type="button" class="seg-btn" data-ctrl="drag">Kaydırma</button>
+          </div>
+          <div class="row2">
+            <button type="button" id="pause-restart" class="btn line" data-action="ask-restart">Yeniden başla</button>
+            <button type="button" class="btn danger" data-action="ask-exit">Çık</button>
+          </div>
+        </div>
+        <div id="pause-confirm" class="hidden" role="alertdialog" aria-labelledby="confirm-title" aria-describedby="confirm-note">
+          <h2 id="confirm-title"></h2>
+          <p id="confirm-note" class="sub"></p>
+          <button type="button" id="confirm-no" class="btn primary big" data-action="confirm-no">Hayır, devam et</button>
+          <button type="button" id="confirm-yes" class="btn danger" data-action="confirm-yes"></button>
+        </div>
       </div>
     </div>
+
     <div class="rotate" aria-hidden="true">
-      <div class="rotate-icon">📱</div>
+      <svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M11 18.5h2"/></svg>
       <p>Telefonu dik tut</p>
     </div>
   </section>
 
   <!-- BITIS -->
   <section id="screen-end" class="screen">
-    <div class="panel">
-      <h2 id="end-title">Maç bitti</h2>
-      <div id="end-score" class="code"></div>
-      <button class="btn primary" data-action="rematch">Yeniden Oyna</button>
-      <button class="btn ghost" data-action="to-lobby">Lobiye Dön</button>
-      <p id="end-note" class="subtitle"></p>
+    <div class="sheet-page holes end" data-result="win">
+      <h2 id="end-title" class="title">Maç bitti</h2>
+      <div id="end-score" class="big-score"><span id="end-me">0</span><b>:</b><span id="end-op">0</span></div>
+      <p id="end-series" class="sub"></p>
+      <dl id="end-stats" class="stats">
+        <div><dt>Maç süresi</dt><dd id="st-time"></dd></div>
+        <div><dt>En sert vuruşun</dt><dd id="st-top"></dd></div>
+        <div><dt>Vuruş, sen – rakip</dt><dd id="st-hits"></dd></div>
+      </dl>
+      <div id="end-ready" class="ready hidden">
+        <span id="rd-me"><i></i>Sen</span><span id="rd-op"><i></i>Rakip</span>
+      </div>
+      <p id="end-note" class="sub note" role="status"></p>
+      <button type="button" id="rematch-btn" class="btn primary big" data-action="rematch">Rövanş</button>
+      <div class="row2">
+        <button type="button" class="btn line" data-action="open-settings">Ayarlar</button>
+        <button type="button" class="btn line" data-action="to-lobby">Çık</button>
+      </div>
     </div>
   </section>
 
+  <!-- Baglanti bildirimi: her ekranin ustunde -->
+  <div id="netmsg" class="netmsg" role="status"></div>
+
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script src="js/net.js?v=7"></script>
-  <script src="js/sfx.js?v=7"></script>
-  <script src="js/game.js?v=7"></script>
-  <script src="js/ui.js?v=7"></script>
-  <script src="js/main.js?v=7"></script>
+  <script src="js/net.js?v=8"></script>
+  <script src="js/sfx.js?v=8"></script>
+  <script src="js/game.js?v=8"></script>
+  <script src="js/ui.js?v=8"></script>
+  <script src="js/main.js?v=8"></script>
 </body>
 </html>

@@ -44,7 +44,8 @@ const Game = (() => {
       goalTop: '#ff5d73', goalBottom: '#2fd6c4', goalW: 6, crease: false,
       puck: '#ffffff', puckRing: null,
       padLocal: '#2fd6c4', padRemote: '#ff5d73', padRing: null,
-      fxTop: '#ff5d73', fxBottom: '#2fd6c4'
+      fxTop: '#ff5d73', fxBottom: '#2fd6c4',
+      scoreTop: '#ff5d73', scoreBottom: '#2fd6c4', holes: 'rgba(255,255,255,.055)'
     },
     arcade: {                              // klasik BCP arcade masasi
       field: '#1f74e0', fieldEdge: '#0e4aa6',
@@ -53,7 +54,8 @@ const Game = (() => {
       goalTop: '#e8302a', goalBottom: '#e8302a', goalW: 7, crease: true,
       puck: '#ffd400', puckRing: 'rgba(0,0,0,.35)',
       padLocal: '#2f6dff', padRemote: '#e8302a', padRing: 'rgba(255,255,255,.9)',
-      fxTop: '#e8302a', fxBottom: '#ffd400'
+      fxTop: '#e8302a', fxBottom: '#ffd400',
+      scoreTop: '#ffffff', scoreBottom: '#ffffff', holes: 'rgba(255,255,255,.10)'
     }
   };
   let skinName = 'neon';
@@ -112,6 +114,13 @@ const Game = (() => {
   let pend = { hit: false, wall: false };
   let sendFx = {};
   const fx = { goalLeft: 0, side: null, isMy: false, shake: 0, parts: [] };
+  // Skor parlamasi (0..1): gol olunca o tarafin rakami 1'e cikip soner
+  let popTop = 0, popBottom = 0, seenTop = null, seenBottom = null;
+  const calm = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  // Mac istatistigi (host doldurur; bitiste misafire 'st' ile gider)
+  let stat = newStat();
+  function newStat() { return { time: 0, hitsH: 0, hitsG: 0, topH: 0, topG: 0 }; }
 
   // Puck cok uzun sure cok yavas kalirsa (kimse oynamiyor) hakem reseti
   let slowT = 0, trapT = 0, trapAt = { x: 0, y: 0 };
@@ -137,6 +146,8 @@ const Game = (() => {
     fx.goalLeft = 0; fx.side = null; fx.shake = 0; fx.parts = [];
     resetStall();
     aiRecoil = 0;
+    stat = newStat();
+    popTop = popBottom = 0; seenTop = seenBottom = null;
     pushHud();
   }
 
@@ -326,8 +337,16 @@ const Game = (() => {
     puck.y += puck.vy * STEP;
     drag(puck, STEP);
 
-    collide(mHost, hv, hq0, px0, py0);
-    if (collide(mGuest, gv, gq0, px0, py0) && ai) aiRecoil = AI_RECOIL;
+    stat.time += STEP;
+    if (collide(mHost, hv, hq0, px0, py0)) {
+      stat.hitsH++;
+      stat.topH = Math.max(stat.topH, Math.hypot(puck.vx, puck.vy));
+    }
+    if (collide(mGuest, gv, gq0, px0, py0)) {
+      stat.hitsG++;
+      stat.topG = Math.max(stat.topG, Math.hypot(puck.vx, puck.vy));
+      if (ai) aiRecoil = AI_RECOIL;
+    }
 
     // yatay duvarlar
     if (puck.x - PR < 0) { puck.x = PR; puck.vx = Math.abs(puck.vx) * WALL_E; pend.wall = true; }
@@ -570,7 +589,12 @@ const Game = (() => {
     else if (winner === 'guest') res = role === 'guest' ? 'win' : 'lose';
     const myScore = role === 'host' ? scoreHost : scoreGuest;
     const opScore = role === 'host' ? scoreGuest : scoreHost;
-    cb.onGameOver && cb.onGameOver(res, myScore + ' - ' + opScore);
+    const h = role === 'host';
+    cb.onGameOver && cb.onGameOver(res, {
+      me: myScore, op: opScore,
+      stats: stat && { time: stat.time, top: h ? stat.topH : stat.topG,
+                       hitsMe: h ? stat.hitsH : stat.hitsG, hitsOp: h ? stat.hitsG : stat.hitsH }
+    });
   }
 
   // --- Ag ---
@@ -585,8 +609,8 @@ const Game = (() => {
         p: { x: puck.x, y: puck.y, vx: puck.vx, vy: puck.vy },
         h: { x: pHost.x, y: pHost.y },
         sh: scoreHost, sg: scoreGuest,
-        ph: phase, t: timeLeft, w: winner,
-        pr: PR, fx: f
+        ph: phase, t: timeLeft, w: winner, c: countdown,
+        pr: PR, fx: f, st: phase === 'over' ? stat : undefined
       });
     } else {
       Net.sendInput({ x: pGuest.x, y: pGuest.y });
@@ -609,6 +633,8 @@ const Game = (() => {
     tgtRemote = { x: d.h.x, y: d.h.y };
     scoreHost = d.sh; scoreGuest = d.sg;
     phase = d.ph; timeLeft = d.t; winner = d.w;
+    countdown = d.c || 0;
+    if (phase === 'over') stat = d.st || null;    // eski surum host: istatistik yok
     pushHud();
     if (d.fx) {
       if (typeof Sfx !== 'undefined') {
@@ -691,6 +717,7 @@ const Game = (() => {
       sx = (Math.random() * 2 - 1) * fx.shake;
       sy = (Math.random() * 2 - 1) * fx.shake;
       fx.shake = Math.max(0, fx.shake - dt * 28);
+      if (calm) sx = sy = 0;
     }
     ctx.save();
     ctx.translate(sx, sy);
@@ -707,6 +734,8 @@ const Game = (() => {
     }
     ctx.fillStyle = grd || skin.field;
     ctx.fillRect(x0, y0, tw, th);
+    drawHoles(x0, y0, tw, th);
+    drawScores(dt);
     if (skin.rail) { ctx.strokeStyle = skin.rail; ctx.lineWidth = skin.railW; }
     else { ctx.strokeStyle = skin.line; ctx.lineWidth = skin.lineW; }
     ctx.strokeRect(x0, y0, tw, th);
@@ -723,17 +752,19 @@ const Game = (() => {
     ctx.beginPath();
     ctx.arc(PX(c.x), PY(c.y), 16 * lay.scale, 0, Math.PI * 2);
     ctx.stroke();
-    circle(PX(c.x), PY(c.y), 2.4 * lay.scale, skin.line);
+    const waiting = phase === 'countdown';
+    if (!waiting) circle(PX(c.x), PY(c.y), 2.4 * lay.scale, skin.line);
 
     // kaleler
     drawGoal(0, skin.goalTop);
     drawGoal(H, skin.goalBottom);
 
-    // disk
+    // disk (geri sayimda gizli: rakam dairenin icinde okunur, puck servisle gelir)
     const pv = toView(puck.x, puck.y);
     const ppx = PX(pv.x), ppy = PY(pv.y);
-    circle(ppx, ppy, PR * lay.scale, skin.puck);
-    if (skin.puckRing) {
+    if (waiting) drawCountdown(PX(c.x), PY(c.y));
+    else circle(ppx, ppy, PR * lay.scale, skin.puck);
+    if (!waiting && skin.puckRing) {
       ctx.beginPath();
       ctx.arc(ppx, ppy, PR * lay.scale, 0, Math.PI * 2);
       ctx.strokeStyle = skin.puckRing; ctx.lineWidth = 1.5; ctx.stroke();
@@ -796,17 +827,79 @@ const Game = (() => {
     // orta mesaj
     let msg = '', isGoal = false;
     if (goalActive && fx.goalLeft > 0.4) {
-      msg = fx.isMy ? 'GOL! 🎉' : 'Gol yedin';
+      msg = fx.isMy ? 'Gol!' : 'Gol yedin';
       isGoal = true;
-    } else if (phase === 'countdown') {
-      if (role === 'host') {
-        const left = Math.max(0, Math.ceil(countdown));
-        msg = left > 0 ? String(left) : '';
-      } else {
-        msg = 'Hazır ol...';
-      }
     }
-    cb.onMessage && cb.onMessage(msg, isGoal);
+    cb.onMessage && cb.onMessage(msg, isGoal, fx.isMy);
+  }
+
+  // Hava delikleri: bir kez kucuk desen ciz, sonra dosenir (kare maliyeti ~0)
+  let holePat = null, holeKey = '';
+  function drawHoles(x0, y0, tw, th) {
+    if (!skin.holes || typeof document === 'undefined' || !ctx.createPattern) return;
+    const step = Math.max(12, Math.round(5 * lay.scale));
+    const key = step + skin.holes;
+    if (key !== holeKey) {
+      const k = document.createElement('canvas');
+      k.width = k.height = step;
+      const g = k.getContext('2d');
+      g.fillStyle = skin.holes;
+      g.beginPath(); g.arc(step / 2, step / 2, 1.3, 0, Math.PI * 2); g.fill();
+      holePat = ctx.createPattern(k, 'repeat');
+      holeKey = key;
+    }
+    ctx.save();
+    ctx.translate(x0, y0);
+    ctx.fillStyle = holePat;
+    ctx.fillRect(0, 0, tw, th);
+    ctx.restore();
+  }
+
+  // Masa ici skor: her yarida o tarafin sayisi. Oyunda silik (puck'i ortmez),
+  // servis beklerken belirgin, golde kisa sure parlak + buyuk.
+  function drawScores(dt) {
+    const bottom = role === 'host' ? scoreHost : scoreGuest;
+    const top = role === 'host' ? scoreGuest : scoreHost;
+    if (seenTop !== null && top > seenTop) popTop = 1;
+    if (seenBottom !== null && bottom > seenBottom) popBottom = 1;
+    seenTop = top; seenBottom = bottom;
+    const rest = phase === 'play' ? 0.24 : 0.5;
+    const one = (n, vy, color, pop) => {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, rest + pop * 0.6);
+      ctx.fillStyle = color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const size = 46 * lay.scale * (calm ? 1 : 1 + pop * 0.18);
+      ctx.font = '700 ' + size.toFixed(1) + 'px "Barlow Condensed","Arial Narrow",sans-serif';
+      ctx.fillText(String(n), PX(W / 2), PY(vy) + size * 0.04);
+      ctx.restore();
+    };
+    one(top, H * 0.30, skin.scoreTop, popTop);
+    one(bottom, H * 0.70, skin.scoreBottom, popBottom);
+    popTop = Math.max(0, popTop - dt * 1.1);
+    popBottom = Math.max(0, popBottom - dt * 1.1);
+  }
+
+  // Geri sayim: orta dairenin icinde rakam + azalan yay
+  function drawCountdown(x, y) {
+    const left = Math.ceil(countdown);
+    if (left <= 0 || fx.goalLeft > 0.4) return;     // gol yazisi varken bekle
+    const r = 16 * lay.scale;
+    ctx.save();
+    ctx.strokeStyle = skin.puck;
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, countdown / 1.5));
+    ctx.stroke();
+    ctx.fillStyle = skin.puck;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const size = 20 * lay.scale;
+    ctx.font = '700 ' + size.toFixed(1) + 'px "Barlow Condensed","Arial Narrow",sans-serif';
+    ctx.fillText(String(left), x, y + size * 0.05);
+    ctx.restore();
   }
 
   function drawGoal(yEdge, color) {
@@ -963,9 +1056,10 @@ const Game = (() => {
   }
 
   // Test/hata ayiklama icin salt-okunur durum
-  function _peek() { return { role, ctrl, phase, lay: { ...lay }, puck: { ...puck }, pHost: { ...pHost }, pGuest: { ...pGuest }, MR, PR, trapT }; }
+  function _peek() { return { role, ctrl, phase, running, scoreHost, scoreGuest, stat: stat && { ...stat }, countdown, mode, lay: { ...lay }, puck: { ...puck }, pHost: { ...pHost }, pGuest: { ...pGuest }, MR, PR, trapT }; }
   // Yalniz test: puck'i belirli bir duruma koy (or. kose sikismasi senaryosu)
+  function _setScore(h, g) { scoreHost = h; scoreGuest = g; pushHud(); }
   function _setPuck(x, y, vx, vy) { puck = { x, y, vx, vy }; phase = 'play'; countdown = 0; }
 
-  return { init, start, restart, stop, resume, layout, setSkin, setPuckSize, setControl, handleInput, handleState, _peek, _setPuck };
+  return { init, start, restart, stop, resume, layout, setSkin, setPuckSize, setControl, handleInput, handleState, _peek, _setPuck, _setScore };
 })();

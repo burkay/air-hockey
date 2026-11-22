@@ -3,7 +3,7 @@
 ## Proje amacı
 iPhone tarayıcısından air hockey. İki mod:
 - **Tek kişilik (Bilgisayara Karşı):** AI rakip, ağ yok. Zorluk: Kolay/Orta/Zor.
-- **Arkadaşınla (uzaktan):** şifre ile eşleşme; kuran + şifre/kural belirler.
+- **Arkadaşınla (uzaktan):** 4 haneli hazır kod / link (isteğe bağlı kendi şifresi); kuran kuralı belirler.
 
 ## Teknoloji
 - Sunucu YOK: statik site, GitHub Pages'ten yayınlanır (`main` / kök dizin).
@@ -75,9 +75,8 @@ iPhone tarayıcısından air hockey. İki mod:
 - Efektler: fizik olayları `pend`/`sendFx`'e biriktirilir; host/AI karede yerel
   ses çalar, host bunu state'in `fx` alanıyla misafire iletir (misafir fizik
   çalıştırmadığı için sesleri/golü oradan alır). Gol görseli `goalFx()`:
-  ekran sarsıntısı + parlama + halka + parçacık (canvas) + "GOL!" mesajı
-  (`onMessage(txt, isGoal)`), skor sayısı CSS `.pop` ile zıplar (UI.hud
-  değişimi yakalar, `UI.resetScores()` yeni maçta sıfırlar).
+  ekran sarsıntısı + parlama + halka + parçacık (canvas) + "Gol!" mesajı
+  (`onMessage(txt, isGoal, isMy)`); masa içi skor parlar (`popTop/popBottom`).
 
 ## Zamanlama (KRİTİK — donma hatası dersi)
 - TÜM oyun zamanlaması `dt` birikimine bağlı (`countdown`, `fx.goalLeft`
@@ -100,7 +99,7 @@ iPhone tarayıcısından air hockey. İki mod:
 - Arcade: mavi gradient zemin, beyaz çizgi+daire+nokta, kırmızı kale yayı
   (crease, tablo-uzayı polyline → host/guest doğru), siyah kalın kasa,
   sarı puck, mavi/kırmızı paddle (beyaz halka).
-- Seçim lobide `.skin-btn[data-skin]`, `localStorage('ah_skin')`'de saklanır,
+- Seçim ayarlarda `[data-skin]`, `localStorage('ah_skin')`'de saklanır,
   `main.js applySkin()` uygular; `body.skin-arcade` letterbox zeminini koyar.
 - `render()` gradient'i `ctx.createLinearGradient` yoksa düz renge düşer
   (headless güvenli).
@@ -130,20 +129,44 @@ iPhone tarayıcısından air hockey. İki mod:
 - **Kopma algılama:** WebRTC `close` geç gelebilir → heartbeat: 500ms'de bir
   `ping`, 4sn veri yoksa kopmuş say. iOS arka planda timer'lar donar; dönünce
   sessizlik yakalanır.
-- **Yeniden bağlanma:** ~25sn **grace**; `peer_dropped` (geçici, oyun durmaz)
+- **Yeniden bağlanma:** ~25sn **grace**; `peer_dropped` (geçici, oyun durur, `ms` = grace)
   → grace dolarsa `peer_left` (terminal). Misafir 2sn'de bir yeniden arar;
   host aynı misafiri `metadata.token` ile tanır → `peer_back`. Başka token
   gelirse `full`. Signaling kopması (`disconnected`) → `peer.reconnect()`
   (aynı kimlik, açık kanal etkilenmez). Bilerek çıkış (`bye`) anında
   `peer_left`. Durum bildirimi ayrı `#netmsg` (game render dokunmaz).
 
+## Arayüz
+- Renk anlamı sabit: turkuaz (`--me`) = sen, kırmızı (`--op`) = rakip. Zemin dokusu
+  masanın hava delikleri (`.holes`, canvas'ta `drawHoles`). Emoji ikon yok, SVG var.
+  Yazı: Barlow + Barlow Condensed (Google Fonts, `display=swap`, yedekli).
+- Ekranlar: `lobby` (masa: üst yarı arkadaş, alt yarı bilgisayar; `data-mode`
+  home/join/create), `settings`, `wait` (davet), `game`, `end`. Lobiye dönüş
+  `goHome()` ile yumuşak, sayfa yenilenmez.
+- Dokunma tek yerden: `data-action` → main.js `ACTIONS` tablosu.
+- Tercihler localStorage: `ah_skin/puck/ctrl/sound/rules/diff`.
+- Skor canvas'ta masanın içinde (`drawScores`): oyunda silik, serviste belirgin, golde
+  parlar. `#score-top/bottom` yalnız ekran okuyucu için. Geri sayım `drawCountdown`
+  orta dairede; o sırada puck çizilmez (beyaz rakam puck üstünde okunmuyordu).
+- Duraklat: `#pause` alt sayfası; tek kişilikte `Game.stop()/resume()`, online'da oyun
+  sürer. Çıkış ve yeniden başlatma HER ZAMAN "emin misiniz" sorar (Burkay istedi).
+  Geri hareketi, arka plana geçme ve telefonu yan çevirme (tek kişilik) de açar.
+- Davet: `newCode()` 4 hane, karışan karakter yok; kod doluysa sessizce yenisi (5 deneme).
+- Rövanş iki taraf hazır olunca başlar: `rq` = "hazırım" (iki yönde), kararı host verir,
+  `rm` ile kural/skin/puck da gider (`Net.rematch(d)`).
+- Seri skoru `main.js series` (oturumluk; yeni rakip/lobi sıfırlar). İstatistik
+  `Game stat`, bitişte misafire state `st`. km/sa: 1 birim = 1,22 cm kabulü.
+- Geçici kopmada oyun İKİ tarafta durur, `#netmsg` geri sayar, `peer_back` sürdürür.
+- Ping göstergesi renk + şekil (renk körlüğü): <80 / <150 / üstü ms.
+
 ## Mobil
-- Ekranlar `.screen` kaydırılabilir; `.panel{margin:auto}` sığarsa ortalar,
-  sığmazsa üstten başlar (align-items:center kullanma: taşan üst kısım kesilir).
-- CSS sonunda telefon blokları: `max-height:700px` (kısa ekran / Safari çubukları),
-  `max-width:600px`, `orientation:landscape and max-height:520px` (oyunda
+- Ekranlar `.screen` kaydırılabilir; içerik sığmazsa üstten başlar
+  (align-items:center kullanma: taşan üst kısım kesilir).
+- `#board` çentik ve home çizgisi dışında kalır (`--st`/`--sb`).
+- CSS sonunda telefon blokları: `max-height:700px` ve `580px` (kısa ekran / Safari
+  çubukları), `max-width:350px`, `orientation:landscape and max-height:520px` (oyunda
   `.rotate` "Telefonu dik tut" katmanı; masa dikey olduğu için).
-- Seçimler `.seg` (gizli radio + span düğme); `name`/`value`'lar main.js'te okunur.
+- Seçimler `.seg` (gizli radio + span, ya da `.seg-btn`). Dokunma alanı en az 44px.
 - Şifre: `autocapitalize/autocorrect=off`; `roomId` küçük harf + boşluk
   normalize eder (iOS ilk harfi büyütüyordu → oda bulunamıyordu).
   i/ı/İ/I hepsi `i`'ye katlanır. `toLocaleLowerCase('tr')` KULLANMA:
@@ -160,15 +183,12 @@ iPhone tarayıcısından air hockey. İki mod:
   halka ayrıca puck boyutu farkını gizliyordu ("puck ayarı çalışmıyor" sanıldı).
   Dokunmatikte varsayılan puck `large` (kayıtlı tercih yoksa).
 - Çok oyuncuda puck boyutunu KURAN belirler; katılanın seçimi o maçta geçmez.
-- `Game._peek()` / `Game._setPuck()` yalnız test içindir (durum okuma, köşe senaryosu).
+- `Game._peek()` / `_setPuck()` / `_setScore()` yalnız test içindir (durum okuma, köşe senaryosu).
 - Davet linki `#oda=<şifre>`: bekleme ekranında `navigator.share` (yoksa
   panoya kopyala); açılışta hash okunur, temizlenir, otomatik katılır.
-- `UI.onShow` kancası: wait/game/end(çok oyuncu) ekranında Wake Lock
+- `UI.onShow` kancası: wait/game ve online end/settings ekranında Wake Lock
   (ekran kararmasın) + `history.pushState` (iOS kenardan geri kaydırma
-  sayfayı terk etmesin). Lobiye dönünce Kur/Katıl düğmeleri yeniden aktif.
-- Oyunda çıkış: sol üst `#exit-btn` → `#exit-dialog` onayı (`openExit`/`closeExit`,
-  Esc de çalışır). Tek kişilikte `Game.stop()`/`Game.resume()` ile duraklar,
-  online'da oyun sürer. Ekran değişince (`UI.onShow`) pencere kendiliğinden kapanır.
+  sayfayı terk etmesin). Lobiye dönünce Davet/Kur/Katıl düğmeleri yeniden aktif.
 - `net.js` `visibilitychange` → sunucuya hemen yeniden bağlan (`wake()`).
 - Ana ekran: `manifest.webmanifest`, `icon-180.png` (apple-touch-icon),
   `icon-512.png`. Arayüz metinleri Türkçe karakterli; kod yorumları ASCII.
