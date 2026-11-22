@@ -950,10 +950,22 @@ const Game = (() => {
     cancelAnimationFrame(rafId);
   }
 
+  // Duraklatilan (stop) maci kaldigi yerden surdur. Duraklamada parmak
+  // oynamis olabilir: paddle hizini sifirla (devamda sahte sert vurus olmasin).
+  function resume() {
+    if (running) return;
+    mHost = newMallet(pHost);
+    mGuest = newMallet(pGuest);
+    lastT = performance.now();
+    acc = 0;
+    running = true;
+    rafId = requestAnimationFrame(frame);
+  }
+
   // Test/hata ayiklama icin salt-okunur durum
   function _peek() { return { role, ctrl, phase, lay: { ...lay }, puck: { ...puck }, pHost: { ...pHost }, pGuest: { ...pGuest }, MR, PR, trapT }; }
   // Yalniz test: puck'i belirli bir duruma koy (or. kose sikismasi senaryosu)
   function _setPuck(x, y, vx, vy) { puck = { x, y, vx, vy }; phase = 'play'; countdown = 0; }
 
-  return { init, start, restart, stop, layout, setSkin, setPuckSize, setControl, handleInput, handleState, _peek, _setPuck };
+  return { init, start, restart, stop, resume, layout, setSkin, setPuckSize, setControl, handleInput, handleState, _peek, _setPuck };
 })();

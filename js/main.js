@@ -103,6 +103,8 @@
     else if (a === 'show-join') UI.lobbyMode('join');
     else if (a === 'back') UI.lobbyMode('home');
     else if (a === 'cancel-wait') { Net.leave(); UI.show('lobby'); UI.lobbyMode('home'); }
+    else if (a === 'ask-exit') openExit();
+    else if (a === 'exit-no') closeExit();
     else if (a === 'to-lobby') {
       if (session.ai) { location.reload(); return; }
       Net.leave();                                   // 'bye' rakibe ulassin
@@ -120,6 +122,28 @@
       }
     }
     else if (a === 'share') shareInvite();
+  });
+
+  // --- Oyundan cikis onayi: tek kisilikte oyun duraklar, online'da surer ---
+  const exitDlg = UI.$('exit-dialog');
+  function exitOpen() { return !exitDlg.classList.contains('hidden'); }
+  function openExit() {
+    if (exitOpen()) return;
+    UI.$('exit-note').textContent = session.ai
+      ? 'Oyun duraklatıldı. Çıkarsanız bu maç silinir.'
+      : 'Oyun arkada devam ediyor. Çıkarsanız maç sona erer.';
+    exitDlg.classList.remove('hidden');
+    if (session.ai) Game.stop();
+    UI.$('exit-no').focus();
+  }
+  function closeExit() {
+    if (!exitOpen()) return;
+    exitDlg.classList.add('hidden');
+    if (session.ai && UI.screen() === 'game') Game.resume();
+  }
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape' || UI.screen() !== 'game') return;
+    if (exitOpen()) closeExit(); else openExit();
   });
 
   // --- Davet linki: #oda=<sifre> (acan kisi otomatik katilir) ---
@@ -163,6 +187,7 @@
   }
   const live = (n) => n === 'wait' || n === 'game' || (n === 'end' && !session.ai);
   UI.onShow((name) => {
+    exitDlg.classList.add('hidden');    // mac bitti / rakip cikti / yeni mac
     if (name === 'lobby') setBusy(false);
     if (name === 'wait') UI.$('share-note').textContent =
       'Arkadaşın linki açınca ya da "Katıl"a basıp bu şifreyi girince oyun başlar.';

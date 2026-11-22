@@ -14,7 +14,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%226%22 fill=%22%2300e5ff%22/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="icon-180.png" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="css/style.css?v=6" />
+  <link rel="stylesheet" href="css/style.css?v=7" />
 </head>
 <body>
   <!-- LOBI -->
@@ -119,6 +119,16 @@
     <div id="center-msg" class="center-msg"></div>
     <div id="netmsg" class="netmsg"></div>
     <button id="mute-btn" class="mute-btn" aria-label="Ses">🔊</button>
+    <button id="exit-btn" class="exit-btn" data-action="ask-exit" aria-label="Oyundan çık">✕</button>
+    <div id="exit-dialog" class="exit-dialog hidden" role="alertdialog" aria-modal="true"
+         aria-labelledby="exit-title" aria-describedby="exit-note">
+      <div class="panel">
+        <h2 id="exit-title">Çıkmak istediğinize emin misiniz?</h2>
+        <p id="exit-note" class="subtitle"></p>
+        <button id="exit-no" class="btn primary" data-action="exit-no">Hayır, devam et</button>
+        <button class="btn danger" data-action="to-lobby">Evet, çık</button>
+      </div>
+    </div>
     <div class="rotate" aria-hidden="true">
       <div class="rotate-icon">📱</div>
       <p>Telefonu dik tut</p>
@@ -137,10 +147,10 @@
   </section>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script src="js/net.js?v=6"></script>
-  <script src="js/sfx.js?v=6"></script>
-  <script src="js/game.js?v=6"></script>
-  <script src="js/ui.js?v=6"></script>
-  <script src="js/main.js?v=6"></script>
+  <script src="js/net.js?v=7"></script>
+  <script src="js/sfx.js?v=7"></script>
+  <script src="js/game.js?v=7"></script>
+  <script src="js/ui.js?v=7"></script>
+  <script src="js/main.js?v=7"></script>
 </body>
 </html>

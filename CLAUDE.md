@@ -166,6 +166,9 @@ iPhone tarayıcısından air hockey. İki mod:
 - `UI.onShow` kancası: wait/game/end(çok oyuncu) ekranında Wake Lock
   (ekran kararmasın) + `history.pushState` (iOS kenardan geri kaydırma
   sayfayı terk etmesin). Lobiye dönünce Kur/Katıl düğmeleri yeniden aktif.
+- Oyunda çıkış: sol üst `#exit-btn` → `#exit-dialog` onayı (`openExit`/`closeExit`,
+  Esc de çalışır). Tek kişilikte `Game.stop()`/`Game.resume()` ile duraklar,
+  online'da oyun sürer. Ekran değişince (`UI.onShow`) pencere kendiliğinden kapanır.
 - `net.js` `visibilitychange` → sunucuya hemen yeniden bağlan (`wake()`).
 - Ana ekran: `manifest.webmanifest`, `icon-180.png` (apple-touch-icon),
   `icon-512.png`. Arayüz metinleri Türkçe karakterli; kod yorumları ASCII.
