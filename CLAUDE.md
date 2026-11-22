@@ -157,6 +157,13 @@ iPhone tarayıcısından air hockey. İki mod:
 - Seri skoru `main.js series` (oturumluk; yeni rakip/lobi sıfırlar). İstatistik
   `Game stat`, bitişte misafire state `st`. km/sa: 1 birim = 1,22 cm kabulü.
 - Geçici kopmada oyun İKİ tarafta durur, `#netmsg` geri sayar, `peer_back` sürdürür.
+- Kopma uyarısı yalnız `clearDrop()` ile temizlenir; `enterGame`/`goHome`/`error_msg`
+  hepsi çağırır. `peer_dropped` maç yokken yok sayılır. `Net.leave()` durumu HEMEN
+  sıfırlar (gecikmeli sıfırlama sahipsiz geri sayım bırakıyordu: "0 sn"de takılı).
+- Misafir kimliği sekmelik (`sessionStorage ah_token`): sayfa yenileyen geri alınır.
+- Davet linki açık sekmeye yapıştırılınca da çalışır (`hashchange`).
+- Gizli sekmede rAF durur: kuranın sekmesi arkadaysa maç ilerlemez (aynı bilgisayarda
+  iki sekmeyle denerken iki ayrı pencere kullan).
 - Ping göstergesi renk + şekil (renk körlüğü): <80 / <150 / üstü ms.
 
 ## Mobil

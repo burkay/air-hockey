@@ -200,6 +200,16 @@ const Net = (() => {
     c.on('error', () => {});
   }
 
+  // Sekme kimligi: sayfa yenilense de ayni kalir -> host ayni misafiri tanir
+  // (yoksa yenileyen oyuncu eski baglantisi dusene kadar "dolu" aliyordu).
+  function tabToken() {
+    let t = token;
+    try { t = t || sessionStorage.getItem('ah_token'); } catch (e) {}
+    t = t || Math.random().toString(36).slice(2);
+    try { sessionStorage.setItem('ah_token', t); } catch (e) {}
+    return t;
+  }
+
   function teardown() {
     clearTimers();
     clearInterval(hb); hb = null;
@@ -251,7 +261,7 @@ const Net = (() => {
       teardown();
       role = 'guest';
       hostId = roomId(password);
-      token = Math.random().toString(36).slice(2);
+      token = tabToken();
       const p = makePeer(null);
       peer = p;
       p.on('open', () => { if (peer === p && !(conn && conn.open)) dial(); });
@@ -275,10 +285,18 @@ const Net = (() => {
     // Host: yeni mac (kural/gorunum degismis olabilir -> misafire de gider)
     rematch(d) { if (d) look = { rules: d.rules, skin: d.skin, puck: d.puck }; send({ t: 'rm', d }); },
     rematchRequest() { send({ t: 'rq' }); },      // "rovansa hazirim" (iki yonde)
+    // Bilerek cikis: durum HEMEN sifirlanir, kanal 'bye' gitsin diye biraz sonra
+    // kapanir. (Once kanal acik birakilip 100ms sonra sifirlaniyordu: rakip o
+    // arada kapatinca bu sayfa kopma sanip sahipsiz geri sayim baslatiyordu.)
     leave() {
       send({ t: 'bye' });
-      const p = peer;
-      setTimeout(() => { if (peer === p) teardown(); }, 100);   // 'bye' gitsin diye kisa bekle
+      const p = peer, c = conn;
+      peer = conn = null;
+      teardown();
+      setTimeout(() => {
+        if (c) { try { c.close(); } catch (e) {} }
+        if (p) { try { p.destroy(); } catch (e) {} }
+      }, 150);
     }
   };
 })();

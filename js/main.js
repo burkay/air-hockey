@@ -32,6 +32,7 @@
   });
 
   function enterGame(opts) {
+    clearDrop();                     // onceki baglantidan kalan uyari olmasin
     resetReady();
     UI.resetScores();
     UI.show('game');
@@ -48,7 +49,7 @@
   }
   function goHome(msg) {
     Game.stop();
-    UI.netMsg(''); stopDropTimer();
+    clearDrop();
     session.role = null; session.ai = false;
     resetSeries();
     applySkin(session.skin); applyPuck(session.puck);
@@ -362,6 +363,8 @@
     // Otomatik kod doluysa sessizce yeni kod dene
     if (d && d.code === 'password_taken' && autoCode && codeTries++ < 5) { createRoom(newCode(), true); return; }
     codeTries = 0;
+    clearDrop();
+    Game.stop();
     session.role = null;
     UI.show('lobby');
     UI.lobbyError(d && d.message ? d.message : 'Bir hata oluştu.');
@@ -369,9 +372,9 @@
 
   // Rakip GECICI koptu (grace): oyun iki tarafta da durur, geri sayim gosterilir.
   let dropT = null;
-  function stopDropTimer() { clearInterval(dropT); dropT = null; }
+  function clearDrop() { clearInterval(dropT); dropT = null; UI.netMsg(''); }
   Net.on('peer_dropped', (d) => {
-    if (session.ai) return;
+    if (!online()) return;            // mac yok: sahipsiz sayac baslatma
     const end = performance.now() + ((d && d.ms) || 25000);
     const tick = () => {
       const s = Math.max(0, Math.ceil((end - performance.now()) / 1000));
@@ -379,21 +382,19 @@
         ? 'Bağlantı koptu. Yeniden bağlanılıyor: ' + s + ' sn'
         : 'Rakibin bağlantısı koptu. Bekleniyor: ' + s + ' sn');
     };
-    stopDropTimer(); tick();
+    clearDrop(); tick();
     dropT = setInterval(tick, 500);
     UI.ping(false);
     if (UI.screen() === 'game') Game.stop();
   });
   Net.on('peer_back', () => {
-    stopDropTimer();
-    UI.netMsg('');
+    clearDrop();
     if (UI.screen() === 'game') Game.resume();
     if (ready.me) Net.rematchRequest();     // kopmada kaybolmus olabilir
   });
 
   Net.on('peer_left', (d) => {
-    stopDropTimer();
-    UI.netMsg('');
+    clearDrop();
     Game.stop();
     if (d && d.who === 'guest' && session.role === 'host') {
       resetReady();
@@ -434,16 +435,20 @@
   UI.show('lobby');
   UI.lobbyMode('home');
 
-  // Davet linkiyle acildiysa (#oda=...) dogrudan katil
-  const inv = location.hash.match(/^#oda=(.+)$/);
-  if (inv) {
+  // Davet linki (#oda=...): acilista VE acik sekmeye yapistirilinca katil
+  function joinFromHash() {
+    const inv = location.hash.match(/^#oda=(.+)$/);
+    if (!inv) return;
     let pw = '';
     try { pw = decodeURIComponent(inv[1]).trim(); } catch (e) {}
     try { history.replaceState(null, '', location.href.split('#')[0]); } catch (e) {}
-    if (pw) {
-      UI.lobbyMode('join');
-      UI.$('join-password').value = pw;
-      UI.$('form-join').requestSubmit();
-    }
+    if (!pw) return;
+    if (online()) Net.leave();
+    goHome();
+    UI.lobbyMode('join');
+    UI.$('join-password').value = pw;
+    UI.$('form-join').requestSubmit();
   }
+  window.addEventListener('hashchange', joinFromHash);
+  joinFromHash();
 })();
