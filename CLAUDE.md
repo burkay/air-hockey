@@ -158,6 +158,9 @@ iPhone tarayıcısından air hockey. İki mod:
   `rm` ile kural/skin/puck da gider (`Net.rematch(d)`).
 - Seri skoru `main.js series` (oturumluk; yeni rakip/lobi sıfırlar). İstatistik
   `Game stat`, bitişte misafire state `st`. km/sa: 1 birim = 1,22 cm kabulü.
+- Maç sonu melodileri `sfx.js SONGS` (win/lose/draw): özgün, MIDI tarzı nota listesi
+  (`[vuruş, MIDI no, uzunluk]`), dosya yok. `playSong` kendi bus'ında; rövanş, çıkış ve
+  ses kapatma `stopMusic` ile keser. Var olan bir oyunun/parçanın melodisini KOPYALAMA.
 - Geçici kopmada oyun İKİ tarafta durur, `#netmsg` geri sayar, `peer_back` sürdürür.
 - Kopma uyarısı yalnız `clearDrop()` ile temizlenir; `enterGame`/`goHome`/`error_msg`
   hepsi çağırır. `peer_dropped` maç yokken yok sayılır. `Net.leave()` durumu HEMEN

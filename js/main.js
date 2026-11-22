@@ -22,7 +22,7 @@
     onHud: UI.hud,
     onMessage: UI.message,
     onGameOver: (result, o) => {
-      if (result === 'lose') Sfx.lose(); else Sfx.win();
+      if (result === 'win') Sfx.win(); else if (result === 'lose') Sfx.lose(); else Sfx.draw();
       if (result === 'win') series.me++;
       else if (result === 'lose') series.op++;
       const st = o.stats && { time: o.stats.time, top: Math.round(o.stats.top * KMH), hitsMe: o.stats.hitsMe, hitsOp: o.stats.hitsOp };
@@ -32,6 +32,7 @@
   });
 
   function enterGame(opts) {
+    Sfx.stopMusic();                 // rovans melodiyi keser
     clearDrop();                     // onceki baglantidan kalan uyari olmasin
     resetReady();
     UI.resetScores();
@@ -49,6 +50,7 @@
   }
   function goHome(msg) {
     Game.stop();
+    Sfx.stopMusic();
     clearDrop();
     session.role = null; session.ai = false;
     resetSeries();
