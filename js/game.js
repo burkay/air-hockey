@@ -21,6 +21,7 @@ const Game = (() => {
   const TRAP_DIST = 8;    // puck bu yaricapli alandan cikamiyorsa "sikismis"
   const TRAP_TIME = 2.5;  // sn: bu kadar sikisik kalirsa hakem yeniden servis
   const AI_BACKOFF = 0.6; // sn: puck bu kadar sikisik kalirsa AI geri cekilir
+  const AI_RECOIL = 0.18; // sn: AI vurustan sonra elini geri ceker (duvara art arda itmesin)
   const STEP = 1 / 120;   // sabit fizik adimi
 
   // --- Skin'ler (yalnizca gorsel; ag/oyun mantigi etkilenmez) ---
@@ -57,6 +58,7 @@ const Game = (() => {
   let ai = false;
   let aiCfg = null;
   let aiErrX = 0, aiErrT = 0;
+  let aiRecoil = 0;       // kalan geri cekilme suresi (sn)
   const AI_PRESETS = {
     // spd: paddle hizi (birim/sn), predict: duvar sekmesi tahmini,
     // aggro: ne kadar one cikip vurdugu, home: savunma derinligi, err: nisan hatasi
@@ -119,6 +121,7 @@ const Game = (() => {
     sendFx = {};
     fx.goalLeft = 0; fx.side = null; fx.shake = 0; fx.parts = [];
     resetStall();
+    aiRecoil = 0;
     pushHud();
   }
 
@@ -223,7 +226,8 @@ const Game = (() => {
     // Puck sikismis gorunuyorsa (or. AI onu koseye bastiriyor) kaleye cekil:
     // puck kendi sekmesiyle kurtulsun; kurtulmazsa TRAP_TIME'da hakem servisi.
     const atWall = puck.x < PR + MR || puck.x > W - PR - MR || puck.y < PR + MR;
-    if (phase === 'play' && atWall && trapT > AI_BACKOFF) {
+    if (aiRecoil > 0) aiRecoil -= STEP;
+    if (phase === 'play' && (aiRecoil > 0 || (atWall && trapT > AI_BACKOFF))) {
       tx = W / 2; ty = homeY;
     } else if (phase === 'play') {
       const onAiHalf = puck.y < H / 2;
@@ -283,7 +287,7 @@ const Game = (() => {
     puck.vy *= FRICTION;
 
     collide(pHost, hv, hq0, px0, py0);
-    collide(pGuest, gv, gq0, px0, py0);
+    if (collide(pGuest, gv, gq0, px0, py0) && ai) aiRecoil = AI_RECOIL;
 
     // yatay duvarlar
     if (puck.x - PR < 0) { puck.x = PR; puck.vx = Math.abs(puck.vx) * WALL_E; pend.wall = true; }
@@ -357,7 +361,11 @@ const Game = (() => {
     } else {
       const C = ax * ax + ay * ay - minD * minD;
       if (C <= 0) {
-        t = 0;                                       // zaten ic ice
+        // Zaten ic ice: adim SONUNDA ayrilmislarsa karisma. (Eskiden burada
+        // puck'in kendi hareketi silinip paddle'in onune konuyordu -> vurulan
+        // puck paddle durana kadar yapisip surukleniyordu.)
+        if (bx * bx + by * by >= minD * minD) return;
+        t = 1;
       } else {
         const B = 2 * (ax * dx + ay * dy);
         const disc = B * B - 4 * A * C;
@@ -401,8 +409,22 @@ const Game = (() => {
       puck.vx += add * nx;
       puck.vy += add * ny;
     }
+    // Adimin kalaninda puck YENI hiziyla gitsin (paddle da q1'e ilerliyor);
+    // yoksa adim sonunda yine ic ice kalir.
+    const sp = Math.hypot(puck.vx, puck.vy);
+    if (sp > MAX_SPD) { puck.vx *= MAX_SPD / sp; puck.vy *= MAX_SPD / sp; }
+    puck.x += puck.vx * STEP * (1 - t);
+    puck.y += puck.vy * STEP * (1 - t);
+    // El puck tavanindan hizliysa yine cakisir: temas NORMALI yonunde disari
+    // koy (q1->puck yonu degil: hizli kaydirmada paddle puck'i gecip puck
+    // arkaya dusmesin).
+    if (Math.hypot(puck.x - q1.x, puck.y - q1.y) < minD) {
+      puck.x = q1.x + nx * (minD + 0.1);
+      puck.y = q1.y + ny * (minD + 0.1);
+    }
     // Ses/efekt yalniz gercek vurusta (yaklasirken) - yaslanmada degil
     if (realHit) pend.hit = true;
+    return realHit;
   }
 
   // Gol gorsel + ses efekti (host/AI: score()'da; misafir: handleState'de)
