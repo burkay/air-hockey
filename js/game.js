@@ -24,13 +24,16 @@ const Game = (() => {
   function spdCap() { return ai ? SPD_CAP_AI : SPD_CAP_NET; }
   // Paddle hizi: kare basina yer degistirme gercek dt ile bolunup suzulur.
   // (Eskiden tek 1/120 adima bolunuyordu: 60Hz'de vurus 2 kat sert cikiyordu.)
-  const LEAD_MAX = 0.18, LEAD_SMOOTH = 0.030;         // sn (misafir gecikme telafisi)
+  const LEAD_MAX = 0.18, LEAD_SMOOTH = 0.030, LEAD_SLEW = 0.20;         // sn (misafir gecikme telafisi)
   const VEL_TAU_LOCAL = 0.016, VEL_TAU_NET = 0.030;   // sn
   const PADDLE_VMAX = 520;// el hizi ust siniri (touch/ag jitter firlatmasini onler)
   const STALL_SPD = 14;   // bunun altinda "cok yavas" sayilir
-  const STALL_TIME = 2.2; // sn: bu kadar sure cok yavas kalirsa hakem yeniden servis
-  const TRAP_DIST = 8;    // puck bu yaricapli alandan cikamiyorsa "sikismis"
-  const TRAP_TIME = 2.5;  // sn: bu kadar sikisik kalirsa hakem yeniden servis
+  const IDLE_TIME = 7;    // sn: puck'a bu kadar sure kimse oynamazsa hakem atisi (gorunur)
+  const TRAP_DIST = 8;    // puck bu yaricapli alandan cikamiyorsa...
+  const TRAP_TIME = 2.5;  // ...bu kadar sn boyunca...
+  const TRAP_HITS = 6;    // ...ve bu kadar temas varsa SIKISMIS (duran puck sikismis sayilmaz)
+  const GOAL_PULL = 260;  // cizgiyi gecen puck'i iceri ceken ivme (sicrama yok)
+  const MIN_SEP = 4;      // temastan sonra paddle'a GORE en az ayrilma hizi
   const AI_BACKOFF = 0.6; // sn: puck bu kadar sikisik kalirsa AI geri cekilir
   const AI_RECOIL = 0.18; // sn: AI vurustan sonra elini geri ceker (duvara art arda itmesin)
   const STEP = 1 / 120;   // sabit fizik adimi
@@ -113,7 +116,8 @@ const Game = (() => {
   // Efektler: fizik olaylarini biriktir, karede ses cal + age ekle
   let pend = { hit: false, wall: false };
   let sendFx = {};
-  const fx = { goalLeft: 0, side: null, isMy: false, shake: 0, parts: [] };
+  const REF_SHOW = 1.0;       // "Hakem atisi" yazisi (sn)
+  const fx = { goalLeft: 0, refLeft: 0, side: null, isMy: false, shake: 0, parts: [] };
   // Skor parlamasi (0..1): gol olunca o tarafin rakami 1'e cikip soner
   let popTop = 0, popBottom = 0, seenTop = null, seenBottom = null;
   const calm = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -123,7 +127,7 @@ const Game = (() => {
   function newStat() { return { time: 0, hitsH: 0, hitsG: 0, topH: 0, topG: 0 }; }
 
   // Puck cok uzun sure cok yavas kalirsa (kimse oynamiyor) hakem reseti
-  let slowT = 0, trapT = 0, trapAt = { x: 0, y: 0 };
+  let slowT = 0, trapT = 0, trapHits = 0, trapAt = { x: 0, y: 0 };
 
   function reset(full) {
     puck = { x: W / 2, y: H / 2, vx: 0, vy: 0 };
@@ -143,10 +147,11 @@ const Game = (() => {
     tgtGuest = { x: W / 2, y: H * 0.18 };
     pend = { hit: false, wall: false };
     sendFx = {};
-    fx.goalLeft = 0; fx.side = null; fx.shake = 0; fx.parts = [];
+    fx.goalLeft = 0; fx.refLeft = 0; fx.side = null; fx.shake = 0; fx.parts = [];
     resetStall();
     aiRecoil = 0;
     stat = newStat();
+    lateBase = null; lead = 0;
     popTop = popBottom = 0; seenTop = seenBottom = null;
     pushHud();
   }
@@ -253,14 +258,16 @@ const Game = (() => {
     // puck kendi sekmesiyle kurtulsun; kurtulmazsa TRAP_TIME'da hakem servisi.
     const atWall = puck.x < PR + MR || puck.x > W - PR - MR || puck.y < PR + MR;
     if (aiRecoil > 0) aiRecoil -= STEP;
-    if (phase === 'play' && (aiRecoil > 0 || (atWall && trapT > AI_BACKOFF))) {
+    if (phase === 'play' && (aiRecoil > 0 || (atWall && trapT > AI_BACKOFF && trapHits >= 2))) {
       tx = W / 2; ty = homeY;
     } else if (phase === 'play') {
       const onAiHalf = puck.y < H / 2;
       const towardAiGoal = puck.vy < -5;            // puck AI kalesine dogru
       const chaseLine = (H / 2) * (0.55 + 0.45 * cfg.aggro);
 
-      if (onAiHalf && !towardAiGoal && puck.y < chaseLine) {
+      // Duran/suzulen puck'i bekleme, git vur (yoksa iki taraf da beklerdi)
+      const lazy = Math.hypot(puck.vx, puck.vy) < 32;
+      if (onAiHalf && (lazy || (!towardAiGoal && puck.y < chaseLine))) {
         // Hucum: puck'in arkasina gec, fizik onu oyuncuya dogru itsin
         tx = puck.x;
         ty = Math.min(H / 2 - MR, Math.max(MR, puck.y - (PR + MR) * 0.5));
@@ -339,49 +346,57 @@ const Game = (() => {
 
     stat.time += STEP;
     if (collide(mHost, hv, hq0, px0, py0)) {
-      stat.hitsH++;
+      stat.hitsH++; trapHits++;
       stat.topH = Math.max(stat.topH, Math.hypot(puck.vx, puck.vy));
     }
     if (collide(mGuest, gv, gq0, px0, py0)) {
-      stat.hitsG++;
+      stat.hitsG++; trapHits++;
       stat.topG = Math.max(stat.topG, Math.hypot(puck.vx, puck.vy));
       if (ai) aiRecoil = AI_RECOIL;
     }
 
-    // yatay duvarlar
-    if (puck.x - PR < 0) { puck.x = PR; puck.vx = Math.abs(puck.vx) * WALL_E; pend.wall = true; }
-    if (puck.x + PR > W) { puck.x = W - PR; puck.vx = -Math.abs(puck.vx) * WALL_E; pend.wall = true; }
-
-    const inGoal = Math.abs(puck.x - W / 2) < GOAL_W / 2;
-    // ust (y=0): misafirin kalesi -> host sayi yapar
-    if (puck.y - PR < 0) {
-      if (inGoal) {
-        if (puck.y < -PR * 2) return score('host');
-        if (puck.vy > -40) puck.vy = -40;     // kale agzinda takilmasin, file ici
-      } else { puck.y = PR; puck.vy = Math.abs(puck.vy) * WALL_E; pend.wall = true; }
-    }
-    // alt (y=H): host'un kalesi -> misafir sayi yapar
-    if (puck.y + PR > H) {
-      if (inGoal) {
-        if (puck.y > H + PR * 2) return score('guest');
-        if (puck.vy < 40) puck.vy = 40;       // kale agzinda takilmasin, file ici
-      } else { puck.y = H - PR; puck.vy = -Math.abs(puck.vy) * WALL_E; pend.wall = true; }
-    }
+    if (edges(puck, STEP)) pend.wall = true;
+    if (puck.mouth && puck.y < -PR * 2) return score('host');       // misafirin kalesi
+    if (puck.mouth && puck.y > H + PR * 2) return score('guest');   // host'un kalesi
 
     const sp = Math.hypot(puck.vx, puck.vy);   // taban yok, puck dogal yavaslar
 
     // Takilma (sabit adim sayaci; mutlak saat yok):
-    //  1) cok uzun sure cok yavas (kimse oynamiyor)
-    //  2) SIKISMA: puck hizli sekse de kucuk bir alandan cikamiyor (or. paddle
-    //     onu koseye bastiriyor -> ses gelir ama oyun ilerlemez). Hiz bakmaz.
+    //  1) BOSTA: puck uzun sure yavas ve kimse oynamiyor. Her nokta bir paddle'in
+    //     menzilinde oldugu icin acele yok; kisa sure (2.2sn) oyun ortasinda
+    //     suzulen puck'i isinliyordu.
+    //  2) SIKISMA: kucuk alandan cikamiyor VE ust uste temas var (paddle koseye
+    //     bastiriyor -> ses gelir ama oyun ilerlemez).
     if (sp < STALL_SPD) slowT += STEP; else slowT = 0;
     if (Math.hypot(puck.x - trapAt.x, puck.y - trapAt.y) > TRAP_DIST) {
       trapAt = { x: puck.x, y: puck.y };
-      trapT = 0;
+      trapT = 0; trapHits = 0;
     } else {
       trapT += STEP;
     }
-    if (slowT > STALL_TIME || trapT > TRAP_TIME) faceoff();
+    if (slowT > IDLE_TIME || (trapT > TRAP_TIME && trapHits >= TRAP_HITS)) refServe();
+  }
+
+  // Duvarlar + kale agzi (host fizigi ve misafir tahmini ortak). Duvara
+  // degdiyse true. Kale agzina giren puck (p.mouth) direkler arasinda kalir:
+  // eskiden yana kayinca disari siciriyordu; cizgiyi gecince de yumusak cekilir
+  // (eskiden hizi bir anda 40'a cikiyordu).
+  function edges(p, dt) {
+    let wall = false;
+    if (p.x < PR) { p.x = PR; p.vx = Math.abs(p.vx) * WALL_E; wall = true; }
+    if (p.x > W - PR) { p.x = W - PR; p.vx = -Math.abs(p.vx) * WALL_E; wall = true; }
+    const top = p.y < PR, bot = p.y > H - PR;
+    if (!top && !bot) { p.mouth = false; return wall; }
+    if (Math.abs(p.x - W / 2) < GOAL_W / 2) p.mouth = true;
+    if (p.mouth) {
+      const l = W / 2 - GOAL_W / 2, r = W / 2 + GOAL_W / 2;
+      if (p.x < l) { p.x = l + 0.05; p.vx = Math.abs(p.vx) * 0.5; wall = true; }
+      if (p.x > r) { p.x = r - 0.05; p.vx = -Math.abs(p.vx) * 0.5; wall = true; }
+      if (p.y < 0) p.vy -= GOAL_PULL * dt;
+      else if (p.y > H) p.vy += GOAL_PULL * dt;
+    } else if (top) { p.y = PR; p.vy = Math.abs(p.vy) * WALL_E; wall = true; }
+    else { p.y = H - PR; p.vy = -Math.abs(p.vy) * WALL_E; wall = true; }
+    return wall;
   }
 
   // Surtunme (host fizigi + misafir ekstrapolasyonu ortak kullanir)
@@ -398,32 +413,54 @@ const Game = (() => {
       const h = Math.min(STEP, dt); dt -= h;
       p.x += p.vx * h; p.y += p.vy * h;
       drag(p, h);
-      if (p.x < PR) { p.x = PR; p.vx = Math.abs(p.vx) * WALL_E; }
-      if (p.x > W - PR) { p.x = W - PR; p.vx = -Math.abs(p.vx) * WALL_E; }
-      if (Math.abs(p.x - W / 2) >= GOAL_W / 2) {
-        if (p.y < PR) { p.y = PR; p.vy = Math.abs(p.vy) * WALL_E; }
-        if (p.y > H - PR) { p.y = H - PR; p.vy = -Math.abs(p.vy) * WALL_E; }
-      }
+      edges(p, h);
     }
-    p.y = Math.max(-PR, Math.min(H + PR, p.y));
+    p.y = Math.max(-PR * 2, Math.min(H + PR * 2, p.y));
   }
-  // Misafir gecikme telafisi: puck KENDI yarisindayken (rakip dokunamaz ->
-  // tahmin guvenli) gidis-donus + cizim yumusatmasi kadar ileri goster ki
-  // savurma host'a vardiginda puck orada olsun. Rakip yarisinda telafi yok.
-  function leadTime(p) {
-    const rtt = Math.min(LEAD_MAX, (Net.rtt ? Net.rtt() : 0) / 1000);
-    const k = Math.max(0, Math.min(1, (H * 0.60 - p.y) / (H * 0.20)));
-    return (rtt + LEAD_SMOOTH) * k;
+  // Titreme (jitter) telafisi: paketin, en hizli gelenlere gore ne kadar GEC
+  // geldigi (sn). Gec paket taze sanilirsa puck bir an durup sonra kendi
+  // kendine hizlanir. Saatler farkli olabilir: yalniz FARKIN degisimi kullanilir.
+  let lateBase = null;
+  function lateness(ts) {
+    if (ts == null) return 0;                    // eski surum host
+    const off = performance.now() - ts;
+    if (lateBase === null || off < lateBase || off - lateBase > 400) lateBase = off;
+    else lateBase += Math.min(0.03, (off - lateBase) * 0.002);   // yavas saat kaymasi / yol degisimi
+    return Math.min(0.12, Math.max(0, off - lateBase) / 1000);
+  }
+  // Misafir gecikme telafisi: puck misafire dogru gelirken (ya da onun yarisinda)
+  // gidis-donus + cizim yumusatmasi kadar ileri goster ki savurma host'a
+  // vardiginda puck orada olsun. Telafi ZAMANLA acilir/kapanir: konuma bagli
+  // acilinca puck orta sahada yavaslayip kendi kendine hizlaniyor gorunuyordu.
+  let lead = 0;
+  function stepLead(p, dt) {
+    const full = Math.min(LEAD_MAX, (Net.rtt ? Net.rtt() : 0) / 1000) + LEAD_SMOOTH;
+    const passedHost = p.vy < 0 && p.y < tgtRemote.y - (PR + MR);   // host artik yetisemez
+    const goal = passedHost || p.y < H / 2 ? full : 0;
+    lead += Math.max(-LEAD_SLEW * dt, Math.min(LEAD_SLEW * dt, goal - lead));
+  }
+  // Ileri sarma host paddle'inin icinden gecmesin: temas yuzeyinde durur
+  function ahead(p, t) {
+    const minD = PR + MR;
+    for (let n = Math.ceil(t / STEP - 1e-6); n > 0; n--) {
+      const x = p.x, y = p.y;
+      coast(p, Math.min(STEP, t)); t -= STEP;
+      if (p.vy > 0 && Math.hypot(p.x - tgtRemote.x, p.y - tgtRemote.y) < minD) { p.x = x; p.y = y; return; }
+    }
   }
 
-  // Hakem: puck'i merkeze koyup rastgele yone yumusak servis (gol degil)
-  function faceoff() {
-    const ang = Math.random() * Math.PI * 2;
-    puck = { x: W / 2, y: H / 2, vx: Math.cos(ang) * 85, vy: Math.sin(ang) * 85 };
+  // Hakem atisi: yazi + geri sayimla yeniden servis (gol degil, habersiz degil)
+  function refServe() {
+    puck = { x: W / 2, y: H / 2, vx: 0, vy: 0 };
+    phase = 'countdown';
+    countdown = 1.4;
+    pendingServe = 'random';
+    fx.refLeft = REF_SHOW;
+    sendFx.r = true;
     resetStall();
   }
   function resetStall() {
-    slowT = 0; trapT = 0;
+    slowT = 0; trapT = 0; trapHits = 0;
     trapAt = { x: puck.x, y: puck.y };
   }
 
@@ -479,6 +516,7 @@ const Game = (() => {
     if (ps > PADDLE_VMAX) { pvx *= PADDLE_VMAX / ps; pvy *= PADDLE_VMAX / ps; }
     // Restitution'lu impuls (sonsuz kutleli mallet) - yalniz yaklasiyorsa
     const vn = (puck.vx - pvx) * nx + (puck.vy - pvy) * ny;
+    const pn = pvx * nx + pvy * ny;
     let realHit = false;
     if (vn < 0) {
       const j = -(1 + PADDLE_E) * vn;
@@ -488,10 +526,11 @@ const Game = (() => {
     }
     // Yapisma onleyici: puck DAIMA paddle'dan ayrilsin. Yoksa yavas puck
     // duran paddle'a yapisip her kare yeniden carpisir (takilma + ses spam).
+    // Olcu paddle'a GORE: eskiden mutlak 30'du, duran paddle'a hafifce degen
+    // puck kendi kendine firliyordu.
     const outN = puck.vx * nx + puck.vy * ny;
-    const MIN_OUT = 30;
-    if (outN < MIN_OUT) {
-      const add = MIN_OUT - outN;
+    if (outN < pn + MIN_SEP) {
+      const add = pn + MIN_SEP - outN;
       puck.vx += add * nx;
       puck.vy += add * ny;
     }
@@ -604,13 +643,13 @@ const Game = (() => {
     lastSend = now;
     if (role === 'host') {
       let f = null;
-      if (sendFx.h || sendFx.w || sendFx.g) { f = sendFx; sendFx = {}; }
+      if (sendFx.h || sendFx.w || sendFx.g || sendFx.r) { f = sendFx; sendFx = {}; }
       Net.sendState({
         p: { x: puck.x, y: puck.y, vx: puck.vx, vy: puck.vy },
         h: { x: pHost.x, y: pHost.y },
         sh: scoreHost, sg: scoreGuest,
         ph: phase, t: timeLeft, w: winner, c: countdown,
-        pr: PR, fx: f, st: phase === 'over' ? stat : undefined
+        pr: PR, fx: f, ts: performance.now(), st: phase === 'over' ? stat : undefined
       });
     } else {
       Net.sendInput({ x: pGuest.x, y: pGuest.y });
@@ -629,8 +668,9 @@ const Game = (() => {
     if (role !== 'guest' || !d) return;
     netPuck = { x: d.p.x, y: d.p.y, vx: d.p.vx, vy: d.p.vy };
     if (d.pr) PR = d.pr;          // puck boyutu host tarafindan belirlenir
-    if (d.ph === 'play') coast(netPuck, leadTime(netPuck));
     tgtRemote = { x: d.h.x, y: d.h.y };
+    const late = lateness(d.ts);
+    if (d.ph === 'play') ahead(netPuck, late + lead);
     scoreHost = d.sh; scoreGuest = d.sg;
     phase = d.ph; timeLeft = d.t; winner = d.w;
     countdown = d.c || 0;
@@ -640,7 +680,9 @@ const Game = (() => {
       if (typeof Sfx !== 'undefined') {
         if (d.fx.h) Sfx.hit();
         if (d.fx.w) Sfx.wall();
-      }      if (d.fx.g) goalFx(d.fx.g);
+      }
+      if (d.fx.g) goalFx(d.fx.g);
+      if (d.fx.r) fx.refLeft = REF_SHOW;
     }
     if (phase === 'over') fireGameOver();
   }
@@ -687,6 +729,7 @@ const Game = (() => {
         // 30/60Hz guncellemeler arasinda puck gercek zamanli akar, gecikme
         // hissi cok azalir. Sonra cizilen puck'i ona hizla yaklastir.
         // Duvarda sekme + surtunme de tahmin edilir (host ile ayni kurallar).
+        if (phase === 'play') stepLead(netPuck, dt); else lead = 0;
         coast(netPuck, dt);
         const ap = Math.min(1, dt * 30);
         puck.x += (netPuck.x - puck.x) * ap;
@@ -829,7 +872,10 @@ const Game = (() => {
     if (goalActive && fx.goalLeft > 0.4) {
       msg = fx.isMy ? 'Gol!' : 'Gol yedin';
       isGoal = true;
+    } else if (fx.refLeft > 0) {
+      msg = 'Hakem atışı';
     }
+    fx.refLeft = Math.max(0, fx.refLeft - dt);
     cb.onMessage && cb.onMessage(msg, isGoal, fx.isMy);
   }
 
@@ -884,7 +930,7 @@ const Game = (() => {
   // Geri sayim: orta dairenin icinde rakam + azalan yay
   function drawCountdown(x, y) {
     const left = Math.ceil(countdown);
-    if (left <= 0 || fx.goalLeft > 0.4) return;     // gol yazisi varken bekle
+    if (left <= 0 || fx.goalLeft > 0.4 || fx.refLeft > 0) return;   // yazi varken bekle
     const r = 16 * lay.scale;
     ctx.save();
     ctx.strokeStyle = skin.puck;

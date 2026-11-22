@@ -34,8 +34,8 @@ iPhone tarayıcısından air hockey. İki mod:
   hızını `PADDLE_E` (0.80) restitution ile yansıtır (eski yapay 0.4·padV
   hilesi YOK; momentum modelden doğal gelir). Puck sürtünmesiz → teğetsel
   bileşen değişmez. **Süpürmeli (swept)** ve detayı "Ağ / netcode"da.
-- **Yapışma önleyici:** temas sonrası puck DAİMA dışa `MIN_OUT` (30) hız
-  alır → yavaş puck duran paddle'a yapışmaz (takılma + ses spam'i olmazdı).
+- **Yapışma önleyici:** temas sonrası puck paddle'a GÖRE en az `MIN_SEP` (4) hızla
+  ayrılır (mutlak 30 değil: duran paddle'a değen puck kendi kendine fırlıyordu).
   `pend.hit`/ses yalnız gerçek vuruşta (yaklaşırken, `vn<0`); yaslanmada yok.
 - Sürtünme `drag()`: `DRAG_C + DRAG_1·v + DRAG_2·v²` (v=100'de ~%16/sn). Host ve
   misafir tahmini (`coast`) aynı fonksiyonu kullanır; ayrı ayrı değiştirme.
@@ -56,16 +56,16 @@ iPhone tarayıcısından air hockey. İki mod:
   `localStorage('ah_puck')`, `main.js applyPuck()`, `UI.markPuck()`.
   Fizik olduğu için host yetkili: state'e `pr` eklenir, misafir
   `handleState`'te `PR=d.pr` (host'un boyutu geçerli).
-- Kale ağzı: puck kale çizgisini geçince (gol tetiği `H+2·PR`'a ulaşana
-  kadar) `vy` zorla ≥40 (içeri) yapılır — yavaş puck ağızda TAKILMAZ
-  (hız tabanı kaldırıldığı için kritik; bu olmadan oyun gol anında donar).
-- Soft-lock yerine hakem reseti (sabit adım sayacı, `STEP` toplanır):
-  puck `STALL_TIME` (2.2sn) `STALL_SPD` (14) altında kalırsa VEYA `TRAP_TIME`
-  (2.5sn) boyunca `TRAP_DIST` (8) yarıçaplı alandan çıkamazsa `faceoff()`.
-  İkincisi köşe sıkışması içindir: paddle puck'ı köşeye bastırınca puck hızlı
-  sekip durur (ses gelir, oyun donar) — hız kontrolü bunu yakalamaz.
-- AI köşe sıkıştırmasın: puck duvar dibinde ve `trapT > AI_BACKOFF` (0.6sn)
-  ise AI kalesine çekilir. AI "puck'ın arkasına geç" hedefi köşede tam
+- Kale ağzı (`edges`, host + misafir tahmini ortak): giren puck (`p.mouth`) direkler
+  arasında kalır, merkezi çizgiyi geçince `GOAL_PULL` ivmesiyle çekilir. Hızı bir anda
+  ayarlama / dışarı koyma YOK (sıçrama ve kendi kendine hızlanma yapıyordu).
+- Hakem atışı (`refServe`, HER ZAMAN görünür: yazı + geri sayım): puck `IDLE_TIME`
+  (7sn) `STALL_SPD` altında kalırsa, ya da `TRAP_TIME` (2.5sn) `TRAP_DIST` alanından
+  çıkamaz VE `TRAP_HITS` (6) temas varsa (köşe sıkışması). Süreyi KISALTMA ve
+  habersiz ışınlama KOYMA: 2.2sn iken süzülen puck oyun ortasında ortaya ışınlanıyordu.
+- AI duran/süzülen puck'a (hız < 32) kendi yarısında gidip vurur.
+- AI köşe sıkıştırmasın: puck duvar dibinde ve `trapT > AI_BACKOFF` (0.6sn) ve en az 2 temas varsa,
+  AI kalesine çekilir. AI "puck'ın arkasına geç" hedefi köşede tam
   puck'ın üstüne düştüğü için sıkıştırıyordu.
 - `PADDLE_VMAX=520` el hızı sınırı (touch/ağ jitter fırlatmasını önler).
 - AI: `pGuest` (üst paddle) kontrol eder. Presetler `AI_PRESETS`
@@ -111,10 +111,12 @@ iPhone tarayıcısından air hockey. İki mod:
 ## Ağ / netcode
 - Gönderim ~60Hz (`maybeSend` 16ms). Misafir: puck **hızıyla ekstrapole**
   edilir (`netPuck` + dead-reckoning); rakip paddle fps-bağımsız yumuşatma.
-- **Gecikme telafisi (misafir):** `net.js` ping/pong ile `Net.rtt()` ölçer;
-  `handleState` puck'ı `leadTime()` kadar (RTT + çizim yumuşatması, en çok
-  0.18+0.03sn) `coast` ile ileri alır. Yalnız misafirin yarısında (y<H·0.4
-  tam, H·0.6'da sıfır): orada rakip dokunamaz, tahmin güvenli.
+- **Gecikme telafisi (misafir):** `net.js` ping/pong ile `Net.rtt()`; `stepLead`
+  telafiyi (RTT + `LEAD_SMOOTH`) ZAMANLA açar/kapatır (`LEAD_SLEW`), puck misafire
+  gelirken ya da onun yarısındayken. Konuma bağlı aç/kapa YAPMA: puck orta sahada
+  yavaşlayıp kendi kendine hızlanıyor görünüyordu. `ahead` host paddle'ında durur.
+- **Titreme telafisi:** state `ts` taşır; `lateness` paketin en hızlılara göre
+  gecikmesi kadar ileri sarar (geç paket taze sanılınca puck sıçrıyordu).
 - **Yetkili misafir paddle gecikmesiz:** host `pGuest = tgtGuest` (yapay
   yumuşatma YOK — eskiden `dt*22` ~90ms gecikme katıp hızlı kaydırmada
   ıskalatıyordu).
