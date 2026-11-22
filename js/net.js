@@ -42,7 +42,8 @@ const Net = (() => {
   let token = null;       // misafir: kendi kimligi (yeniden baglanmada ayni kisi mi?)
   let guestToken = null;  // host: su anki misafirin kimligi
   let opened = false;     // host: oda acildi / misafir: maca katildi
-  let lastRx = 0, lastTx = 0;
+  let lastRx = 0, lastPing = 0;
+  let rttMs = 0;          // suzulmus gidis-donus suresi (ms)
   let graceT = null, retryT = null, joinT = null, hb = null;
 
   function stop(t) { if (t) clearTimeout(t); return null; }
@@ -56,7 +57,7 @@ const Net = (() => {
 
   function send(msg) {
     if (!conn || !conn.open) return;
-    try { conn.send(msg); lastTx = performance.now(); } catch (e) {}
+    try { conn.send(msg); } catch (e) {}
   }
 
   // Canli-tut + sessizlik algilama (WebRTC 'close' olayi gec gelebilir)
@@ -65,7 +66,8 @@ const Net = (() => {
     hb = setInterval(() => {
       if (!conn || !conn.open) return;
       const now = performance.now();
-      if (now - lastTx > PING_MS) send({ t: 'ping' });
+      // Gecikme olcumu: ts geri yansir (pong). Oyun sirasinda da surer.
+      if (now - lastPing > PING_MS) { lastPing = now; send({ t: 'ping', ts: now }); }
       if (now - lastRx > SILENT_MS) dropConn();
     }, 250);
   }
@@ -97,6 +99,12 @@ const Net = (() => {
       case 'i': emit('input', m.d); break;
       case 'rm': emit('rematch'); break;
       case 'rq': emit('rematch_request'); break;
+      case 'ping': if (m.ts != null) send({ t: 'pong', ts: m.ts }); break;
+      case 'pong': {
+        const r = performance.now() - m.ts;
+        if (r >= 0 && r < 2000) rttMs = rttMs ? rttMs + (r - rttMs) * 0.2 : r;
+        break;
+      }
       case 'bye': leftNow(); break;
       case 'full': fail('room_full', 'Bu oyun dolu.'); break;
       case 'hello':
@@ -199,6 +207,7 @@ const Net = (() => {
     const p = peer;
     peer = null;
     if (p) { try { p.destroy(); } catch (e) {} }
+    rttMs = 0;
     role = hostId = look = guestToken = null;
     opened = false;
   }
@@ -260,6 +269,7 @@ const Net = (() => {
       }, JOIN_MS);
     },
 
+    rtt() { return rttMs; },
     sendState(d) { send({ t: 's', d }); },
     sendInput(d) { send({ t: 'i', d }); },
     rematch() { send({ t: 'rm' }); },

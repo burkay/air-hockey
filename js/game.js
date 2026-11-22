@@ -12,9 +12,20 @@ const Game = (() => {
   function setPuckSize(n) { PR = PUCK_SIZES[n] || PUCK_SIZES.med; }
   const GOAL_W = 38;      // kale acikligi
   const WALL_E = 0.90;    // ray (duvar) restitution'i - bir miktar enerji kaybi
-  const PADDLE_E = 0.92;  // puck-mallet restitution'i (plastik-plastik, canli)
-  const FRICTION = 0.9997;// adim basina hava direnci (hava masasi ~ surtunmesiz)
-  const MAX_SPD = 240;    // puck hiz tavani (tunelleme/absurt hiz engeli)
+  const PADDLE_E = 0.80;  // puck-mallet restitution'i
+  // Surtunme: yavaslama (birim/sn^2) = DRAG_C + DRAG_1*v + DRAG_2*v^2
+  //  sabit kisim yavas puck'i durdurur, v^2 kismi sert vurusu hizla dizginler
+  const DRAG_C = 3, DRAG_1 = 0.08, DRAG_2 = 0.0007;
+  // Hiz tavani YUMUSAK: KNEE'ye kadar aynen, sonra tavana yaklasarak sikisir
+  // (sert vurus HER ZAMAN daha hizli; eskiden 240'ta kesilip hepsi esitti).
+  const SPD_KNEE = 170;
+  const SPD_CAP_AI = 360;   // tek kisilik
+  const SPD_CAP_NET = 290;  // cok oyunculu: hiz x gecikme hatasi paddle'i asmasin
+  function spdCap() { return ai ? SPD_CAP_AI : SPD_CAP_NET; }
+  // Paddle hizi: kare basina yer degistirme gercek dt ile bolunup suzulur.
+  // (Eskiden tek 1/120 adima bolunuyordu: 60Hz'de vurus 2 kat sert cikiyordu.)
+  const LEAD_MAX = 0.18, LEAD_SMOOTH = 0.030;         // sn (misafir gecikme telafisi)
+  const VEL_TAU_LOCAL = 0.016, VEL_TAU_NET = 0.030;   // sn
   const PADDLE_VMAX = 520;// el hizi ust siniri (touch/ag jitter firlatmasini onler)
   const STALL_SPD = 14;   // bunun altinda "cok yavas" sayilir
   const STALL_TIME = 2.2; // sn: bu kadar sure cok yavas kalirsa hakem yeniden servis
@@ -76,7 +87,11 @@ const Game = (() => {
   let lay = { scale: 1, offX: 0, offY: 0 };
 
   // Yetkili durum (host doldurur; misafir state ile gunceller)
-  let puck, pHost, pGuest, pHostPrev, pGuestPrev;
+  let puck, pHost, pGuest;
+  // Fizikteki paddle: hedef konuma kare icindeki adimlara bolunerek gider.
+  // { x,y: son adim konumu; tx,ty: onceki karenin hedefi; vx,vy: suzulmus hiz }
+  let mHost, mGuest;
+  function newMallet(p) { return { x: p.x, y: p.y, tx: p.x, ty: p.y, vx: 0, vy: 0 }; }
   let scoreHost, scoreGuest, phase, winner;
   let countdown = 0, pendingServe = 'random';   // saniye cinsinden kalan sure
   let timeLeft = 120;
@@ -105,8 +120,8 @@ const Game = (() => {
     puck = { x: W / 2, y: H / 2, vx: 0, vy: 0 };
     pHost = { x: W / 2, y: H * 0.82 };
     pGuest = { x: W / 2, y: H * 0.18 };
-    pHostPrev = { ...pHost };
-    pGuestPrev = { ...pGuest };
+    mHost = newMallet(pHost);
+    mGuest = newMallet(pGuest);
     if (full) { scoreHost = 0; scoreGuest = 0; }
     winner = null;
     phase = 'countdown';
@@ -269,25 +284,50 @@ const Game = (() => {
   }
 
   // --- Fizik (yalnizca host) ---
-  function integrate() {
-    if (ai) aiMove();
-    // Bu adimin baslangic (eski) paddle konumlari = supurmeli carpisma icin
-    const hq0 = pHostPrev, gq0 = pGuestPrev;
-    const hv = { x: (pHost.x - hq0.x) / STEP, y: (pHost.y - hq0.y) / STEP };
-    const gv = { x: (pGuest.x - gq0.x) / STEP, y: (pGuest.y - gq0.y) / STEP };
-    pHostPrev = { x: pHost.x, y: pHost.y };
-    pGuestPrev = { x: pGuest.x, y: pGuest.y };
+  // Kare basi: paddle hizini gercek kare suresiyle olc ve suz
+  function trackMallet(m, p, dt, tau) {
+    if (dt <= 0) return;
+    const a = 1 - Math.exp(-dt / tau);
+    m.vx += ((p.x - m.tx) / dt - m.vx) * a;
+    m.vy += ((p.y - m.ty) / dt - m.vy) * a;
+    m.tx = p.x; m.ty = p.y;
+  }
+  // Adim: kalan yolun 1/left kadarini git; eski konumu dondur (supurme icin)
+  function stepMallet(m, p, left) {
+    const q0 = { x: m.x, y: m.y };
+    m.x += (p.x - m.x) / left;
+    m.y += (p.y - m.y) / left;
+    return q0;
+  }
+  function softCap(v) {
+    const cap = spdCap();
+    return v <= SPD_KNEE ? v : SPD_KNEE + (cap - SPD_KNEE) * (1 - Math.exp(-(v - SPD_KNEE) / (cap - SPD_KNEE)));
+  }
+
+  // left: bu karede (bu dahil) kalan adim sayisi
+  function integrate(left) {
+    const hq0 = stepMallet(mHost, pHost, left);
+    const hv = { x: mHost.vx, y: mHost.vy };
+    let gq0, gv;
+    if (ai) {                                 // AI adim adim ilerler: hiz kesin
+      gq0 = { x: pGuest.x, y: pGuest.y };
+      aiMove();
+      mGuest.x = pGuest.x; mGuest.y = pGuest.y;
+      gv = { x: (mGuest.x - gq0.x) / STEP, y: (mGuest.y - gq0.y) / STEP };
+    } else {
+      gq0 = stepMallet(mGuest, pGuest, left);
+      gv = { x: mGuest.vx, y: mGuest.vy };
+    }
 
     if (phase !== 'play') return;
 
     const px0 = puck.x, py0 = puck.y;       // adim oncesi puck konumu
     puck.x += puck.vx * STEP;
     puck.y += puck.vy * STEP;
-    puck.vx *= FRICTION;
-    puck.vy *= FRICTION;
+    drag(puck, STEP);
 
-    collide(pHost, hv, hq0, px0, py0);
-    if (collide(pGuest, gv, gq0, px0, py0) && ai) aiRecoil = AI_RECOIL;
+    collide(mHost, hv, hq0, px0, py0);
+    if (collide(mGuest, gv, gq0, px0, py0) && ai) aiRecoil = AI_RECOIL;
 
     // yatay duvarlar
     if (puck.x - PR < 0) { puck.x = PR; puck.vx = Math.abs(puck.vx) * WALL_E; pend.wall = true; }
@@ -309,12 +349,7 @@ const Game = (() => {
       } else { puck.y = H - PR; puck.vy = -Math.abs(puck.vy) * WALL_E; pend.wall = true; }
     }
 
-    // Hiz tavani (tunelleme/absurt hiz engeli) - taban yok, puck dogal yavaslar
-    const sp = Math.hypot(puck.vx, puck.vy);
-    if (sp > MAX_SPD) {
-      puck.vx *= MAX_SPD / sp;
-      puck.vy *= MAX_SPD / sp;
-    }
+    const sp = Math.hypot(puck.vx, puck.vy);   // taban yok, puck dogal yavaslar
 
     // Takilma (sabit adim sayaci; mutlak saat yok):
     //  1) cok uzun sure cok yavas (kimse oynamiyor)
@@ -328,6 +363,38 @@ const Game = (() => {
       trapT += STEP;
     }
     if (slowT > STALL_TIME || trapT > TRAP_TIME) faceoff();
+  }
+
+  // Surtunme (host fizigi + misafir ekstrapolasyonu ortak kullanir)
+  function drag(p, dt) {
+    const v = Math.hypot(p.vx, p.vy);
+    if (v < 1e-6) return;
+    const k = Math.max(0, v - (DRAG_C + DRAG_1 * v + DRAG_2 * v * v) * dt) / v;
+    p.vx *= k; p.vy *= k;
+  }
+
+  // Paddle'siz serbest hareket tahmini (misafir): duvar sekmesi + surtunme
+  function coast(p, dt) {
+    for (let n = Math.ceil(dt / STEP - 1e-6); n > 0; n--) {
+      const h = Math.min(STEP, dt); dt -= h;
+      p.x += p.vx * h; p.y += p.vy * h;
+      drag(p, h);
+      if (p.x < PR) { p.x = PR; p.vx = Math.abs(p.vx) * WALL_E; }
+      if (p.x > W - PR) { p.x = W - PR; p.vx = -Math.abs(p.vx) * WALL_E; }
+      if (Math.abs(p.x - W / 2) >= GOAL_W / 2) {
+        if (p.y < PR) { p.y = PR; p.vy = Math.abs(p.vy) * WALL_E; }
+        if (p.y > H - PR) { p.y = H - PR; p.vy = -Math.abs(p.vy) * WALL_E; }
+      }
+    }
+    p.y = Math.max(-PR, Math.min(H + PR, p.y));
+  }
+  // Misafir gecikme telafisi: puck KENDI yarisindayken (rakip dokunamaz ->
+  // tahmin guvenli) gidis-donus + cizim yumusatmasi kadar ileri goster ki
+  // savurma host'a vardiginda puck orada olsun. Rakip yarisinda telafi yok.
+  function leadTime(p) {
+    const rtt = Math.min(LEAD_MAX, (Net.rtt ? Net.rtt() : 0) / 1000);
+    const k = Math.max(0, Math.min(1, (H * 0.60 - p.y) / (H * 0.20)));
+    return (rtt + LEAD_SMOOTH) * k;
   }
 
   // Hakem: puck'i merkeze koyup rastgele yone yumusak servis (gol degil)
@@ -412,7 +479,7 @@ const Game = (() => {
     // Adimin kalaninda puck YENI hiziyla gitsin (paddle da q1'e ilerliyor);
     // yoksa adim sonunda yine ic ice kalir.
     const sp = Math.hypot(puck.vx, puck.vy);
-    if (sp > MAX_SPD) { puck.vx *= MAX_SPD / sp; puck.vy *= MAX_SPD / sp; }
+    if (realHit && sp > SPD_KNEE) { const k = softCap(sp) / sp; puck.vx *= k; puck.vy *= k; }
     puck.x += puck.vx * STEP * (1 - t);
     puck.y += puck.vy * STEP * (1 - t);
     // El puck tavanindan hizliysa yine cakisir: temas NORMALI yonunde disari
@@ -537,10 +604,11 @@ const Game = (() => {
   function handleState(d) {
     if (role !== 'guest' || !d) return;
     netPuck = { x: d.p.x, y: d.p.y, vx: d.p.vx, vy: d.p.vy };
+    if (d.pr) PR = d.pr;          // puck boyutu host tarafindan belirlenir
+    if (d.ph === 'play') coast(netPuck, leadTime(netPuck));
     tgtRemote = { x: d.h.x, y: d.h.y };
     scoreHost = d.sh; scoreGuest = d.sg;
     phase = d.ph; timeLeft = d.t; winner = d.w;
-    if (d.pr) PR = d.pr;          // puck boyutu host tarafindan belirlenir
     pushHud();
     if (d.fx) {
       if (typeof Sfx !== 'undefined') {
@@ -580,8 +648,10 @@ const Game = (() => {
         }
         // sabit adimli fizik
         acc += dt;
-        let steps = 0;
-        while (acc >= STEP && steps < 6) { integrate(); acc -= STEP; steps++; }
+        trackMallet(mHost, pHost, dt, VEL_TAU_LOCAL);
+        if (!ai) trackMallet(mGuest, pGuest, dt, VEL_TAU_NET);
+        let left = Math.min(6, Math.floor(acc / STEP));
+        for (; left > 0; left--) { integrate(left); acc -= STEP; }
         if (acc > STEP * 6) acc = 0;
         // bu karenin fizik olaylarini sesle + age yansit
         if (pend.hit) { if (typeof Sfx !== 'undefined') Sfx.hit(); sendFx.h = true; pend.hit = false; }
@@ -590,10 +660,8 @@ const Game = (() => {
         // Misafir: yetkili puck'i HIZIYLA ekstrapole et (dead-reckoning) ->
         // 30/60Hz guncellemeler arasinda puck gercek zamanli akar, gecikme
         // hissi cok azalir. Sonra cizilen puck'i ona hizla yaklastir.
-        netPuck.x += netPuck.vx * dt;
-        netPuck.y += netPuck.vy * dt;
-        netPuck.x = Math.max(0, Math.min(W, netPuck.x));
-        netPuck.y = Math.max(0, Math.min(H, netPuck.y));
+        // Duvarda sekme + surtunme de tahmin edilir (host ile ayni kurallar).
+        coast(netPuck, dt);
         const ap = Math.min(1, dt * 30);
         puck.x += (netPuck.x - puck.x) * ap;
         puck.y += (netPuck.y - puck.y) * ap;

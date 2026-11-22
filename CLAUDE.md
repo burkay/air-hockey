@@ -31,16 +31,26 @@ iPhone tarayıcısından air hockey. İki mod:
 
 ## Oyun dinamikleri (game.js sabitleri) — gerçekçi model
 - Çarpışma: mallet = el kontrollü → sonsuz kütle. `collide()` bağıl normal
-  hızını `PADDLE_E` (0.92) restitution ile yansıtır (eski yapay 0.4·padV
+  hızını `PADDLE_E` (0.80) restitution ile yansıtır (eski yapay 0.4·padV
   hilesi YOK; momentum modelden doğal gelir). Puck sürtünmesiz → teğetsel
   bileşen değişmez. **Süpürmeli (swept)** ve detayı "Ağ / netcode"da.
 - **Yapışma önleyici:** temas sonrası puck DAİMA dışa `MIN_OUT` (30) hız
   alır → yavaş puck duran paddle'a yapışmaz (takılma + ses spam'i olmazdı).
   `pend.hit`/ses yalnız gerçek vuruşta (yaklaşırken, `vn<0`); yaslanmada yok.
-- `FRICTION=0.9997` (adım/120Hz) ≈ %3.5/sn hava direnci.
+- Sürtünme `drag()`: `DRAG_C + DRAG_1·v + DRAG_2·v²` (v=100'de ~%16/sn). Host ve
+  misafir tahmini (`coast`) aynı fonksiyonu kullanır; ayrı ayrı değiştirme.
 - `WALL_E=0.90` ray restitution'ı (bir miktar enerji kaybı).
-- `MAX_SPD=240` tavan (tünelleme/absürt hız engeli). **Hız tabanı YOK** —
-  puck doğal yavaşlar.
+- Hız tavanı YUMUŞAK (`softCap`): `SPD_KNEE` (170) altı aynen, üstü tavana
+  yaklaşarak sıkışır; sert vuruş hep daha hızlı. Tavan AI'da 360, ağda 290.
+  Sert kesme (eski `MAX_SPD=240`) KOYMA: 60Hz'de el hızı 60+ hepsi eşitti.
+  **Hız tabanı YOK** — puck doğal yavaşlar.
+- Paddle hızı kare `dt`'siyle ölçülür ve süzülür (`trackMallet`), konum kare
+  içindeki adımlara bölünür (`stepMallet`, `mHost`/`mGuest`). Kare yer
+  değiştirmesini tek `STEP`'e BÖLME: 60Hz'de vuruş 2 kat sert çıkıyordu.
+- `collide()` temas sonrası puck'ı adımın kalanında YENİ hızıyla ilerletir; iç
+  içe başlayan adımda puck hareketini silmez. Eskiden silindiği için vurulan
+  puck paddle durana kadar yapışıp sürükleniyordu (tek vuruş 37-46 adım).
+- AI vuruştan sonra `AI_RECOIL` (0.18sn) geri çekilir (duvara art arda itmesin).
 - Puck boyutu: `PR` artık `let`; `setPuckSize(n)` → `PUCK_SIZES`
   {small:2.4, med:3.2, large:4.4}. Lobide `[data-puck]`,
   `localStorage('ah_puck')`, `main.js applyPuck()`, `UI.markPuck()`.
@@ -102,6 +112,10 @@ iPhone tarayıcısından air hockey. İki mod:
 ## Ağ / netcode
 - Gönderim ~60Hz (`maybeSend` 16ms). Misafir: puck **hızıyla ekstrapole**
   edilir (`netPuck` + dead-reckoning); rakip paddle fps-bağımsız yumuşatma.
+- **Gecikme telafisi (misafir):** `net.js` ping/pong ile `Net.rtt()` ölçer;
+  `handleState` puck'ı `leadTime()` kadar (RTT + çizim yumuşatması, en çok
+  0.18+0.03sn) `coast` ile ileri alır. Yalnız misafirin yarısında (y<H·0.4
+  tam, H·0.6'da sıfır): orada rakip dokunamaz, tahmin güvenli.
 - **Yetkili misafir paddle gecikmesiz:** host `pGuest = tgtGuest` (yapay
   yumuşatma YOK — eskiden `dt*22` ~90ms gecikme katıp hızlı kaydırmada
   ıskalatıyordu).
@@ -112,8 +126,8 @@ iPhone tarayıcısından air hockey. İki mod:
 - **Bağlantı (net.js):** host PeerJS kimliği = `bk-airhockey-v2-` + şifre
   özeti (`roomId`); misafir rastgele kimlikle o kimliği arar. Tek veri kanalı,
   `reliable` + `json`. Mesajlar `{t}`: `s` state, `i` input, `rm`/`rq`
-  rematch, `hello` (host→misafir: kural/skin/puck), `full`, `bye`, `ping`.
-- **Kopma algılama:** WebRTC `close` geç gelebilir → heartbeat: 500ms boşta
+  rematch, `hello` (host→misafir: kural/skin/puck), `full`, `bye`, `ping`/`pong` (`ts`).
+- **Kopma algılama:** WebRTC `close` geç gelebilir → heartbeat: 500ms'de bir
   `ping`, 4sn veri yoksa kopmuş say. iOS arka planda timer'lar donar; dönünce
   sessizlik yakalanır.
 - **Yeniden bağlanma:** ~25sn **grace**; `peer_dropped` (geçici, oyun durmaz)
